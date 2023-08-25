@@ -8,9 +8,9 @@ import mplfinance as mpf
 import plotly.graph_objs as go
 import datetime as dt
 
-import schedule
-from time import sleep
-import threading
+# import schedule
+# from time import sleep
+# import threading
 
 import numpy as np
 
