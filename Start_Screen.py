@@ -8,9 +8,9 @@ import mplfinance as mpf
 import plotly.graph_objs as go
 import datetime as dt
 
-# import schedule
-# from time import sleep
-# import threading
+import schedule
+from time import sleep
+import threading
 
 import numpy as np
 
@@ -44,7 +44,7 @@ class CompanyData:
 #____________________________初期値を代入する関数________________________________________
  #全体の期間を指定
 all_range_start = dt.datetime(2020,9,1)
-all_range_end = dt.datetime(2022,3,31)
+# all_range_end = dt.datetime(2021,3,31)
 now_range = dt.datetime(2021,1,1)
 # now = dt.datetime(2021,1,1)
 
@@ -67,6 +67,9 @@ def main():
     if "now" not in st.session_state:
         st.session_state.now = dt.datetime(2021,1,4)
 
+    if "all_range_end" not in st.session_state:
+        st.session_state.all_range_end = dt.datetime(2021,2,1)  
+
     #乱数から企業名をリストに格納する
     if "chose_companies" not in st.session_state:
         st.session_state.chose_companies = []
@@ -82,8 +85,14 @@ def main():
         st.session_state.possess_KK_df = pd.DataFrame(columns=['企業名', '保有株式数', '現在の株価', '1株あたりの株価', '利益'])
 
     #買い・売りのログデータのデータフレーム作成
-    if "buy_sell_log" not in st.session_state:
-        st.session_state.buy_sell_log = pd.DataFrame(columns=['企業名', '年月', '属性'])
+    if "buy_log" not in st.session_state:
+        st.session_state.buy_log = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '属性'])
+
+    if "sell_log" not in st.session_state:
+        st.session_state.sell_log = pd.DataFrame(columns=['企業名', '年月', '売却根拠', '利益', '属性'])
+
+    if "system_end" not in st.session_state:
+        st.session_state.system_end = False
 
 if "main_executed" not in st.session_state:
     main()  # main関数を実行
@@ -154,16 +163,16 @@ def make_graph(name, rdf):
               }
 
     data =  [
-            go.Candlestick(yaxis="y1",x=rdf.index, open=rdf["Open"], high=rdf["High"], low=rdf["Low"], close=rdf["Close"],
+            go.Candlestick(yaxis="y1",x=rdf.index, open=rdf["Open"], high=rdf["High"], low=rdf["Low"], close=rdf["Close"], name="株価",
                            increasing_line_color="red", decreasing_line_color="gray"),
             #５日平均線追加
-            go.Scatter(yaxis="y1",x=rdf.index, y=rdf["ma5"], name="MA5",
+            go.Scatter(yaxis="y1",x=rdf.index, y=rdf["ma5"], name="5日平均線",
                 line={ "color": "royalblue", "width":1.2}),
             #25日平均線追加
-            go.Scatter(yaxis="y1",x=rdf.index, y=rdf["ma25"], name="MA25",
+            go.Scatter(yaxis="y1",x=rdf.index, y=rdf["ma25"], name="25日平均線",
                 line={ "color": "lightseagreen", "width":1.2}),
             #出来高追加
-            go.Bar(yaxis="y2", x=rdf.index, y=rdf["Volume"], name="Volume",
+            go.Bar(yaxis="y2", x=rdf.index, y=rdf["Volume"], name="出来高",
                 marker={ "color": "slategray"})
             ]
     fig = go.Figure(data = data, layout = go.Layout(layout))
@@ -214,45 +223,16 @@ rdf_all = st.session_state.target_company.rdf_all
 
 #_______________________________1日、１週間進めるボタン作成_____________________________________________________
 #nowを更新する関数
-def add_next_day():
-    # clear_output(True)
-    # display(hboxa, output)
-    
-    # global now
-    next_day = st.session_state.now + dt.timedelta(days=1)
+def add_next_day(num):
+
+    next_day = st.session_state.now + dt.timedelta(days=num)
 
     # next_day が rdf_all に存在するか確認し、存在しない場合は次の日付に移動
     while next_day not in rdf_all.index:
         next_day += dt.timedelta(days=1)
-
-        # 全体の期間を超えた場合はループを終了
-        if st.session_state.now > all_range_end:
-            print("シミュレーション終了")
-            return rdf  # 変更なしの rdf を返す
     
     st.session_state.now = next_day
-    # print(f"now = {st.session_state.now}")
 
-#nowを更新する関数
-def add_next_week():
-
-    # clear_output(True)
-    # display(hboxa, output)
-    
-    # global now
-    next_week = st.session_state.now + dt.timedelta(days=7)
-
-    # next_week が rdf_all に存在するか確認し、存在しない場合は次の日付に移動
-    while next_week not in rdf_all.index:
-        next_week += dt.timedelta(days=1)
-
-        # 全体の期間を超えた場合はループを終了
-        if st.session_state.now > all_range_end:
-            print("シミュレーション終了")
-            return rdf  # 変更なしの rdf を返す
-    
-    st.session_state.now = next_week
-    # print(f"now = {st.session_state.now}")
 
 
 #________________________________再生・停止ボタンに関するコード___________________________________________
@@ -420,13 +400,13 @@ def buy(name, rdf_all):
     benefit = 0
     
     #buy_num = input("何株購入しますか？")
-    buy_num = 100
+    # buy_num = st.session_state.buy_num
     
     #最新のrdfの株価を取得
     now_data_KK = rdf_all['Close'][st.session_state.now]
     
     #購入金額を計算
-    purchace_amount = now_data_KK * buy_num
+    purchace_amount = now_data_KK * st.session_state.buy_num
     
     if purchace_amount > st.session_state.possess_money:
          print('買付余力が足りません')
@@ -439,12 +419,13 @@ def buy(name, rdf_all):
         
         #1株あたりの株価を算出
         possess_KK_num_one = possess_KK_num / 100
-        possess_KK_avg = (possess_KK_num_one * possess_KK_avg + now_data_KK) / (possess_KK_num_one + 1)
+        buy_num_one = st.session_state.buy_num / 100
+        possess_KK_avg = (possess_KK_num_one * possess_KK_avg + now_data_KK * buy_num_one) / (possess_KK_num_one + buy_num_one)
         
         #保有株式数を追加
-        possess_KK_num += 100   
+        possess_KK_num += st.session_state.buy_num   
         #この銘柄の合計金額を変数に格納
-        possess_KK = possess_KK_avg * possess_KK_num
+        # possess_KK = possess_KK_avg * possess_KK_num
     
         benefit = (now_data_KK - possess_KK_avg) * possess_KK_num
     
@@ -464,11 +445,12 @@ def buy(name, rdf_all):
             st.session_state.possess_KK_df = pd.concat([st.session_state.possess_KK_df,possess_KK_df_temp],ignore_index=True)
             
         #データログにデータを追加
-        buy_sell_log_temp = pd.DataFrame(columns=['企業名', '年月', '属性'])
-        buy_sell_log_temp['企業名'] = [name]
-        buy_sell_log_temp['年月'] = [st.session_state.now]
-        buy_sell_log_temp['属性'] = ['買い']
-        st.session_state.buy_sell_log = pd.concat([st.session_state.buy_sell_log,buy_sell_log_temp],ignore_index=True)
+        buy_log_temp = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '属性'])
+        buy_log_temp['企業名'] = [name]
+        buy_log_temp['年月'] = [st.session_state.now]
+        buy_log_temp['購入根拠'] = [st.session_state.Rationale_for_purchase]
+        buy_log_temp['属性'] = ['買い']
+        st.session_state.buy_log = pd.concat([st.session_state.buy_log,buy_log_temp],ignore_index=True)
     
       
         st.session_state.possess_money -= purchace_amount
@@ -491,7 +473,7 @@ def sell(name, rdf_all):
     
     # global possess_money, possess_KK_df
 
-    sell_num = 100
+    sell_num = st.session_state.sell_num
     
     #最新のrdfの株価を取得
     now_data_KK = rdf_all['Close'][st.session_state.now]
@@ -504,50 +486,60 @@ def sell(name, rdf_all):
     #保有株があるなら、評価損益を計算して利益を表示する
     #エラー分の表示
     if possess_KK_num == 0:
-        raise Exception('あなたは株を持っていません！')
+        st.write('あなたはこの株を持っていません')
+        # raise Exception('あなたは株を持っていません！')
+    else:
+        #損益を計算し格納
+        benefit = (now_data_KK - possess_KK_avg)*st.session_state.sell_num
         
-    #損益を計算し格納
-    # benefit = (now_data_KK - possess_KK_avg)*100
-    
-    #保有株式、保有株式数を変更
-#     possess_KK -= possess_KK_avg * 100
-    possess_KK_num -= 100
-    
-    #保有株式の株価と株式数を更新
-    st.session_state.possess_KK_df['1株あたりの株価'] = st.session_state.possess_KK_df['1株あたりの株価'].mask(st.session_state.possess_KK_df['企業名']==name,[possess_KK_avg])
-    st.session_state.possess_KK_df['保有株式数'] = st.session_state.possess_KK_df['保有株式数'].mask(st.session_state.possess_KK_df['企業名']==name,[possess_KK_num])
-    
-    st.session_state.possess_KK_df = st.session_state.possess_KK_df[st.session_state.possess_KK_df['保有株式数']!=0]
-    
+        #保有株式、保有株式数を変更
+        # possess_KK -= possess_KK_avg * 100
+        possess_KK_num -= st.session_state.sell_num
+        
+        #保有株式の株価と株式数を更新
+        st.session_state.possess_KK_df['1株あたりの株価'] = st.session_state.possess_KK_df['1株あたりの株価'].mask(st.session_state.possess_KK_df['企業名']==name,[possess_KK_avg])
+        st.session_state.possess_KK_df['保有株式数'] = st.session_state.possess_KK_df['保有株式数'].mask(st.session_state.possess_KK_df['企業名']==name,[possess_KK_num])
+        
+        st.session_state.possess_KK_df = st.session_state.possess_KK_df[st.session_state.possess_KK_df['保有株式数']!=0]
+        
+                
+        sell_log_temp = pd.DataFrame(columns=['企業名', '年月', '売却根拠', '利益','属性'])
+        sell_log_temp['企業名'] = [name]
+        sell_log_temp['年月'] = [st.session_state.now]
+        sell_log_temp['売却根拠'] = [st.session_state.basis_for_sale]
+        sell_log_temp['利益'] = [benefit]
+        sell_log_temp['属性'] = ['売り']
+        st.session_state.sell_log = pd.concat([st.session_state.sell_log,sell_log_temp],ignore_index=True)
+
             
-    buy_sell_log_temp = pd.DataFrame(columns=['企業名', '年月', '属性'])
-    buy_sell_log_temp['企業名'] = [name]
-    buy_sell_log_temp['年月'] = [st.session_state.now]
-    buy_sell_log_temp['属性'] = ['売り']
-    st.session_state.buy_sell_log = pd.concat([st.session_state.buy_sell_log,buy_sell_log_temp],ignore_index=True)
+        st.session_state.possess_money += now_data_KK * st.session_state.sell_num
 
+
+        # if possess_KK_df.empty == True:
+        #     print("あなたは現在株を所有していません。")
+        # else:
+        #     print("現在保有している株式")
+        #     display(possess_KK_df)
         
-    st.session_state.possess_money += now_data_KK * sell_num
-
-    # if possess_KK_df.empty == True:
-    #     print("あなたは現在株を所有していません。")
-    # else:
-    #     print("現在保有している株式")
-    #     display(possess_KK_df)
-    
-    # print(f"買付余力：{round(possess_money)}")
+        # print(f"買付余力：{round(possess_money)}")
     #_______________________________________
 
 def change_page_and_chose_company(num, name):
     st.session_state.selected_company = name
-    st.session_state["page-select"] = f"page{num}"
+    st.session_state.page_id = f"page{num}"
 
 def change_page(num):
-    st.session_state["page-select"] = f"page{num}"
+    st.session_state.page_id = f"page{num}"
 
 def change_page2(num):
     st.session_state["page-select2"] = f"page2_{num}"
 #_____________________________________________________________________________________________________________________________
+
+# 全体の期間を超えた場合はループを終了
+if st.session_state.now > st.session_state.all_range_end:
+    # st.write("シミュレーション終了")
+    st.session_state.system_end = True
+    change_page(5)
 
 if "selected_company" not in st.session_state:
     st.session_state.selected_company = st.session_state.chose_companies_name_list[0]
@@ -564,6 +556,20 @@ for i in range(0, len(st.session_state.possess_KK_df)):
     target_company_temp2 = st.session_state.loaded_companies[index_temp]
     st.session_state.possess_KK_df['現在の株価'][i] = target_company_temp2.rdf_all['Close'][st.session_state.now]
     st.session_state.possess_KK_df['利益'][i] = (st.session_state.possess_KK_df['現在の株価'][i] - st.session_state.possess_KK_df['1株あたりの株価'][i]) * st.session_state.possess_KK_df['保有株式数'][i]
+
+button_css1 = f"""
+    <style>
+        div.stButton > button:first-child  {{
+        color        : white               ;
+        width        : 100%                ;
+        font-weight  : bold                ;/* 文字：太字                   */
+        border       : 1px solid #000      ;/* 枠線：ピンク色で5ピクセルの実線 */
+        border-radius: 1px 1px 1px 1px     ;/* 枠線：半径10ピクセルの角丸     */
+        background   : #a9a9a9             ;/* 背景色：薄いグレー            */
+    }}
+    </style>
+    """
+st.markdown(button_css1, unsafe_allow_html=True)
 
 #_____________________________________________________________トレード画面_________________________________________________________________________________________________________________________________
 
@@ -593,7 +599,7 @@ if st.session_state.show_page:
             </style>
             """
             st.markdown(button_css1, unsafe_allow_html=True)
-            st.button("一日進める", on_click=add_next_day)
+            st.button("一日進める", on_click=lambda: add_next_day(1))
         with col2:
             button_css1 = f"""
             <style>
@@ -608,7 +614,7 @@ if st.session_state.show_page:
             </style>
             """
             st.markdown(button_css1, unsafe_allow_html=True)
-            st.button("一週間進める", on_click=add_next_week)
+            st.button("一週間進める", on_click=lambda: add_next_day(7))
 
         st.write(f"now = {st.session_state.now}")
 
@@ -654,15 +660,8 @@ if st.session_state.show_page:
                     make_simple_graph(name_temp, rdf_all_temp)
 
 
-        # st.selectbox で選択された値を st.session_state に保存
-        # st.session_state.selected_company = st.selectbox("selectbox", chose_companies_name_list)
+        st.button("保有株式へ", on_click=lambda: change_page(3))
 
-        # index = c_master[c_master['企業名'] == st.session_state.selected_company].index.values[0]
-        # st.session_state.target_company = loaded_companies[index]
-
-        # st.session_state.target_company = st.session_state.selected_company 
-
-        # st.write(st.session_state.selected_company)
 
     def page2():
         st.title("トレード画面")
@@ -683,7 +682,7 @@ if st.session_state.show_page:
             </style>
             """
             st.markdown(button_css1, unsafe_allow_html=True)
-            action = st.button("一日進める", on_click=add_next_day)
+            action = st.button("一日進める", on_click=lambda: add_next_day(1))
 
         with col2:
             # st.markdown('<div id="button2"></div>', unsafe_allow_html=True)
@@ -703,7 +702,7 @@ if st.session_state.show_page:
             </style>
             """
             st.markdown(button_css2, unsafe_allow_html=True)
-            action2 = st.button("一週間進める", on_click=add_next_week)
+            action2 = st.button("一週間進める", on_click=lambda: add_next_day(7))
 
         
 
@@ -758,7 +757,7 @@ if st.session_state.show_page:
             </style>
             """
             st.markdown(button_css3, unsafe_allow_html=True)
-            action = st.button("買う", on_click=lambda: buy(name, rdf_all))
+            action = st.button("買う", on_click=lambda: change_page(6))
         with col4:
             st.markdown('<div id="button4"></div>', unsafe_allow_html=True)
             button_css4 = f"""
@@ -774,18 +773,18 @@ if st.session_state.show_page:
             </style>
             """
             st.markdown(button_css4, unsafe_allow_html=True)
-            action = st.button("売る", on_click=lambda: sell(name, rdf_all))
+            action = st.button("売る", on_click=lambda: change_page(7))
 
         st.write("_______________________________________________________________________________________________________")
 
         st.button("企業情報を見る",on_click = lambda: change_page(4))
 
-
-        # if st.session_state.possess_KK_df.empty == True:
-        #     st.write("あなたは現在株を所有していません。") 
-        # else:
-        #     st.write("現在保有している株式") 
-        #     st.dataframe(st.session_state.possess_KK_df)
+        st.write("_______________________________________________________________________________________________________")
+        if st.session_state.possess_KK_df.empty == True:
+            st.write("あなたは現在株を所有していません。") 
+        else:
+            st.write("現在保有している株式") 
+            st.dataframe(st.session_state.possess_KK_df)
 
 
     def page3():
@@ -799,9 +798,14 @@ if st.session_state.show_page:
 
         st.subheader(f"買付余力：{round(st.session_state.possess_money)}")
 
+        st.button("選択可能銘柄一覧へ戻る",on_click=lambda: change_page(1))
+
 
     def page4():
         st.title("企業情報")
+        st.write("_______________________________________________________________________________________________________")
+        st.button("トレード画面へ戻る",on_click=lambda: change_page(2))
+        st.write("_______________________________________________________________________________________________________")
 
         name = st.session_state.target_company.name
 
@@ -815,48 +819,141 @@ if st.session_state.show_page:
     
         st.write('専門家予想')
 
-    
+
+
+
     def page5():
+        st.title("結果画面")
+        # st.header(f"{st.session_state.acount_name}さんの結果")
+        st.subheader("全体の投資傾向について")
+        st.write("########################################")
+
+        st.write("投資傾向分類結果を書く")
+
+        st.write("########################################")
+
+        st.subheader("改善案")
+        st.write("########################################")
+
+        st.write("各種投資行動の説明を書く")
+
+        st.write("########################################")
+
+        if st.button("スタート画面に戻る"):
+            st.session_state.show_page = False
+
+
+    def page6():
+        st.title("購入画面") 
+
+        st.button("キャンセル",on_click=lambda: change_page(2))
+
+        #購入株式数
+        st.session_state.buy_num = st.slider("売却株式数", 100, 1000, st.session_state.get("buy_num", 100),step=100)
+
+        if "Rationale_for_purchase" not in st.session_state:
+            st.session_state.Rationale_for_purchase = "指定なし"
+
+        buy_reason_arrow = [
+            "企業の業績がいいから",
+            "株価が急に動いたから",
+            "財務データがいいから"
+        ]
+
+        #購入根拠
+        st.session_state.Rationale_for_purchase = st.radio("購入根拠", buy_reason_arrow)
+
+        if st.button("購入する"):
+            buy(name, rdf_all)
+            change_page(2)
+
+    def page7():
+        st.title("売却画面") 
+
+        st.button("キャンセル",on_click=lambda: change_page(2))
+
+        #売却株式数
+        st.session_state.sell_num = st.slider("売却株式数", 100, 1000, st.session_state.get("sell_num", 100),step=100)
+
+        if "basis_for_sale" not in st.session_state:
+            st.session_state.basis_for_sale = "指定なし"
+
+        sell_reason_arrow = [
+            "企業の業績がいいから",
+            "株価が急に動いたから",
+            "財務データがいいから"
+        ]
+
+        #購入根拠
+        st.session_state.basis_for_sale = st.radio("売却根拠", sell_reason_arrow)
+
+        if st.button("売却する"):
+            sell(name, rdf_all)
+            change_page(2)
+
+    
+    def page8():
         st.title("テスト画面")
         st.subheader("買い・売りログデータ")
-        st.dataframe(st.session_state.buy_sell_log)
+        col_buy, col_sell = st.columns(2)
+        with col_buy:
+            st.dataframe(st.session_state.buy_log)
+        with col_sell:
+            st.dataframe(st.session_state.sell_log)
+
+        st.button("選択可能銘柄一覧へ戻る",on_click=lambda: change_page(1))
 
 
-    pages = dict(
-        page1="選択可能銘柄一覧",
-        page2="トレード画面",
-        page3="保有資産",
-        page4="企業情報",
-        page5="テスト画面"
-    )
+    # pages = dict(
+    #     page1="選択可能銘柄一覧",
+    #     page2="トレード画面",
+    #     page3="保有資産",
+    #     page4="企業情報",
+    #     page5="結果",
+    #     page6="テスト画面"
+    # )
 
-    page_id = st.sidebar.selectbox( # st.sidebar.*でサイドバーに表示する
-        "ページ名",
-        ["page1", "page2", "page3", "page4","page5"],
-        format_func=lambda page_id: pages[page_id], # 描画する項目を日本語に変換
-        key="page-select"
-    )
+    # page_id = st.sidebar.selectbox( # st.sidebar.*でサイドバーに表示する
+    #     "ページ名",
+    #     ["page1", "page2", "page3", "page4","page5","page6"],
+    #     format_func=lambda page_id: pages[page_id], # 描画する項目を日本語に変換
+    #     key="page-select"
+    # )
 
-    if page_id == "page1":
+    if "page_id" not in st.session_state:
+        st.session_state.page_id = "page1"
+
+    if st.session_state.page_id == "page1":
         page1()
 
-    if page_id == "page2":
+    if st.session_state.page_id == "page2":
         page2()
 
-    if page_id == "page3":
+    if st.session_state.page_id == "page3":
         page3()
 
-    if page_id == "page4":
+    if st.session_state.page_id == "page4":
         page4()
 
-    if page_id == "page5":
-        page5() 
+    if st.session_state.page_id == "page5":
+        page5()
 
-    st.sidebar.write("_______________________________________________________________________________________________________")
+    if st.session_state.page_id == "page6":
+        page6()   
 
-    st.sidebar.button("一日進める", key='uniq_key_1',on_click=add_next_day)
-    st.sidebar.button("一週間進める", key='uniq_key_2', on_click=add_next_week)
+    if st.session_state.page_id == "page7":
+        page7()   
+
+    if st.session_state.page_id == "page8":
+        page8()
+ 
+
+    # st.sidebar.write("_______________________________________________________________________________________________________")
+
+    st.sidebar.button("一日進める", key='uniq_key_1',on_click=lambda: add_next_day(1))
+    st.sidebar.button("一週間進める", key='uniq_key_2', on_click=lambda: add_next_day(7))
     st.sidebar.write(f"now = {st.session_state.now}")
+    st.sidebar.write(f"end = {st.session_state.all_range_end}")
 
     st.sidebar.header(f"買付余力：{round(st.session_state.possess_money)} 円")
     if st.session_state.possess_KK_df.empty == True:
@@ -865,14 +962,25 @@ if st.session_state.show_page:
         st.sidebar.write("現在保有している株式") 
         st.sidebar.dataframe(st.session_state.possess_KK_df)
 
+    st.sidebar.button("保有株式へ", key='uniq_key_3',on_click=lambda: change_page(3))
+    st.sidebar.button("売買ログへ", key='uniq_key_4',on_click=lambda: change_page(8))
+
 
     st.sidebar.write("_______________________________________________________________________________________________________")
 
     if st.sidebar.button('シミュレーションを終了する'):
         st.session_state.show_page = False
+        # col_yes, col_no = st.columns((5, 5))
+        # with col_yes:
+        #     if st.sidebar.button("はい"):
+        #         st.session_state.show_page = False
+        # with col_no:
+        #     st.sidebar.button("いいえ")
+        
 
 
 
+#_____________________________________________________________スタート画面_________________________________________________________________________________________________________________________________
 
 else:
 
@@ -907,17 +1015,82 @@ else:
         with col6:
             st.button("このシミュレーションシステムについて", on_click=lambda: change_page2(5))
 
+        st.button("これまでの実績", on_click=lambda: change_page2(2))
+        st.button("アカウント設定", on_click=lambda: change_page2(3))
+
+        level_id = st.selectbox(
+            "レベルセレクト",
+            ["チュートリアル", "LEVEL_1", "LEVEL_2", "LEVEL_3"],
+            key="level-select"
+        )
+
+        if level_id == "チュートリアル":
+            st.session_state.all_range_end = dt.datetime(2021,2,1) 
+            st.write("１ヶ月で利益を出してください")
+        
+        if level_id == "LEVEL_1":
+            st.session_state.all_range_end = dt.datetime(2021,4,1) 
+            st.write("３ヶ月で+5万円の利益を出してください")
+
+        if level_id == "LEVEL_2":
+            st.session_state.all_range_end = dt.datetime(2021,7,1) 
+            st.write("６ヶ月で+10万円の利益を出してください")
+
+        if level_id == "LEVEL_3":
+            st.session_state.all_range_end = dt.datetime(2022,1,1) 
+            st.write("１年で+20万円利益を出してください")    
+
         if st.button('シミュレーションを始める'):
-            st.session_state.show_page = True
-            # st.session_state.reset = True
+            if st.session_state.account_created==True:
+                st.session_state.show_page = True
+                # st.session_state.reset = True
+            else:
+                st.write("アカウント情報を入力してください")
+
 
     def page2_2():
         st.title("実績")
 
+        st.write("########################################")
+
+        st.write("ここにこれまでの実績を持ってくる")
+
+        st.write("########################################")
+
+        st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
 
 
     def page2_3():
         st.title("アカウント情報")
+        st.write("########################################")
+
+        st.write("ここに個人情報の利用について書く")
+
+        st.write("########################################")
+
+        if "account_created" not in st.session_state:
+            st.session_state.account_created = False
+
+        if not st.session_state.account_created:
+            if st.button("アカウントを作成する"):
+                st.session_state.account_created = True
+
+        if st.session_state.account_created:
+            st.session_state.acount_name = st.text_input("アカウント名を入力してください", value=st.session_state.get("acount_name", ""))
+            st.session_state.acount_age = st.text_input("年齢を入力してください", value=st.session_state.get("acount_age", ""))
+            st.session_state.acount_sex = st.selectbox("性別を入力してください", ("男", "女"), index=0 if st.session_state.get("acount_sex", "男") == "男" else 1)
+
+            st.write("以下のURLから個人の性格についてのテストを実施して情報を入力してください。")
+            st.write("https://commutest.com/bigfive")
+            st.session_state.Open = st.slider("開放性", 0, 6, st.session_state.get("Open", 6))
+            st.session_state.Integrity = st.slider("誠実性", 0, 6, st.session_state.get("Integrity", 6))
+            st.session_state.Diplomatic = st.slider("外交性", 0, 6, st.session_state.get("Diplomatic", 6))
+            st.session_state.Coordination = st.slider("協調性", 0, 6, st.session_state.get("Coordination", 6))
+            st.session_state.Neuroticism = st.slider("神経症傾向", 0, 6, st.session_state.get("Neuroticism", 6))
+
+
+        st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
+
 
 
     
