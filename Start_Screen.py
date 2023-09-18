@@ -1034,7 +1034,7 @@ if st.session_state.show_page:
 
         st.button("保有株式へ", on_click=lambda: change_page(3))
 
-        st.session_state.show_page = True
+        # st.session_state.show_page = True
 
 
     # トレード画面
@@ -1157,7 +1157,7 @@ if st.session_state.show_page:
             st.write("現在保有している株式") 
             st.dataframe(st.session_state.possess_KK_df)
 
-        st.session_state.show_page = True
+        # st.session_state.show_page = True
 
 
     # 保有株式画面
@@ -1174,7 +1174,7 @@ if st.session_state.show_page:
 
         st.button("選択可能銘柄一覧へ戻る",on_click=lambda: change_page(1))
 
-        st.session_state.show_page = True
+        # st.session_state.show_page = True
 
 
     # 企業情報画面
@@ -1240,7 +1240,7 @@ if st.session_state.show_page:
             st.write('アナリスト分析の内容')
             # ここに該当するデータや情報を表示
 
-        st.session_state.show_page = True
+        # st.session_state.show_page = True
 
 
     # 結果画面
@@ -1485,7 +1485,7 @@ if st.session_state.show_page:
 
         st.button("購入する",on_click=lambda: buy(name, rdf_all))
 
-        st.session_state.show_page = True
+        # st.session_state.show_page = True
 
             
     # 売却画面
@@ -1516,7 +1516,7 @@ if st.session_state.show_page:
 
         st.button("売却する",on_click=lambda: sell(name, rdf_all))
 
-        st.session_state.show_page = True
+        # st.session_state.show_page = True
 
 
     # ログ画面
@@ -1531,7 +1531,7 @@ if st.session_state.show_page:
 
         st.button("選択可能銘柄一覧へ戻る",on_click=lambda: change_page(1))
 
-        st.session_state.show_page = True
+        # st.session_state.show_page = True
 
     # 日経平均
     def page9():
