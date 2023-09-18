@@ -1034,6 +1034,9 @@ if st.session_state.show_page:
 
         st.button("保有株式へ", on_click=lambda: change_page(3))
 
+        st.session_state.show_page = True
+
+
     # トレード画面
     def page2():
         st.title("トレード画面")
@@ -1154,6 +1157,9 @@ if st.session_state.show_page:
             st.write("現在保有している株式") 
             st.dataframe(st.session_state.possess_KK_df)
 
+        st.session_state.show_page = True
+
+
     # 保有株式画面
     def page3():
         st.title("保有株式")
@@ -1167,6 +1173,9 @@ if st.session_state.show_page:
         st.subheader(f"買付余力：{round(st.session_state.possess_money)}")
 
         st.button("選択可能銘柄一覧へ戻る",on_click=lambda: change_page(1))
+
+        st.session_state.show_page = True
+
 
     # 企業情報画面
     def page4():
@@ -1230,6 +1239,9 @@ if st.session_state.show_page:
         elif selected_page == "アナリスト分析":
             st.write('アナリスト分析の内容')
             # ここに該当するデータや情報を表示
+
+        st.session_state.show_page = True
+
 
     # 結果画面
     def page5():
@@ -1472,6 +1484,9 @@ if st.session_state.show_page:
         st.session_state.Rationale_for_purchase = st.radio("購入根拠", buy_reason_arrow)
 
         st.button("購入する",on_click=lambda: buy(name, rdf_all))
+
+        st.session_state.show_page = True
+
             
     # 売却画面
     def page7():
@@ -1501,6 +1516,9 @@ if st.session_state.show_page:
 
         st.button("売却する",on_click=lambda: sell(name, rdf_all))
 
+        st.session_state.show_page = True
+
+
     # ログ画面
     def page8():
         st.title("テスト画面")
@@ -1512,6 +1530,9 @@ if st.session_state.show_page:
             st.dataframe(st.session_state.sell_log)
 
         st.button("選択可能銘柄一覧へ戻る",on_click=lambda: change_page(1))
+
+        st.session_state.show_page = True
+
     # 日経平均
     def page9():
         st.title("日経平均株価")
@@ -1588,8 +1609,10 @@ if st.session_state.show_page:
     st.sidebar.write("_______________________________________________________________________________________________________")
 
     st.sidebar.button('シミュレーションを終了する',on_click=end_sym())
-        
+
     st.session_state.show_page = True
+
+        
 #_____________________________________________________________スタート画面_________________________________________________________________________________________________________________________________
 
 else:
