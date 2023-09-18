@@ -200,8 +200,6 @@ def make_simple_graph(name, rdf):
     buf.seek(0)
     return buf
 
-
-
 #rdfからグラフを表示する関数
 def make_graph(name, rdf, buy_date=None, sell_date=None, now_kk_bool=False, max_date=False):
     #初期の表示期間指定
@@ -308,8 +306,6 @@ def add_next_day(num):
     
     st.session_state.now = next_day
 
-
-
 #________________________________再生・停止ボタンに関するコード___________________________________________
 ##############################################################################################################################
 
@@ -381,6 +377,8 @@ def buy(name, rdf_all):
     
       
         st.session_state.possess_money -= purchace_amount
+
+        change_page(2)
     
     #_______________________________________
 
@@ -434,6 +432,8 @@ def sell(name, rdf_all):
 
                 
             st.session_state.possess_money += now_data_KK * st.session_state.sell_num
+
+            change_page(2)
 
 #_______________________________評価用基本統計・ヒストグラムの設定___________________________________
 def display_distribution(data):
@@ -870,6 +870,24 @@ def reset():
     if "result_bool" in st.session_state:
         del st.session_state.result_bool
     
+def end_sym():
+    st.session_state.show_page = False
+
+def start_sym(n):
+    # 初めから始めるボタン
+    if n == 1:
+        reset()
+        if st.session_state.account_created==True:
+            st.session_state.show_page = True
+        else:
+            st.write("アカウント情報を入力してください")
+
+    # 続きから始めるボタン
+    if n == 2:
+        if st.session_state.account_created==True:
+            st.session_state.show_page = True
+        else:
+            st.write("アカウント情報を入力してください")
 
 def change_page(num, name=None):
     if name:
@@ -1421,8 +1439,8 @@ if st.session_state.show_page:
             st.session_state.result.append(Simulation_Results_instance)
             st.session_state.result_bool = True
 
-        if st.button("スタート画面に戻る"):
-            st.session_state.show_page = False
+        st.button("スタート画面に戻る",on_click=end_sym())
+
 
     # 購入画面
     def page6():
@@ -1453,9 +1471,8 @@ if st.session_state.show_page:
         #購入根拠
         st.session_state.Rationale_for_purchase = st.radio("購入根拠", buy_reason_arrow)
 
-        if st.button("購入する"):
-            buy(name, rdf_all)
-            change_page(2)
+        st.button("購入する",on_click=lambda: buy(name, rdf_all))
+            
     # 売却画面
     def page7():
         st.title("売却画面") 
@@ -1482,9 +1499,7 @@ if st.session_state.show_page:
         #購入根拠
         st.session_state.basis_for_sale = st.radio("売却根拠", sell_reason_arrow)
 
-        if st.button("売却する"):
-            sell(name, rdf_all)
-            change_page(2)
+        st.button("売却する",on_click=lambda: sell(name, rdf_all))
 
     # ログ画面
     def page8():
@@ -1572,8 +1587,7 @@ if st.session_state.show_page:
 
     st.sidebar.write("_______________________________________________________________________________________________________")
 
-    if st.sidebar.button('シミュレーションを終了する'):
-        st.session_state.show_page = False
+    st.sidebar.button('シミュレーションを終了する',on_click=end_sym())
         
 
 #_____________________________________________________________スタート画面_________________________________________________________________________________________________________________________________
@@ -1621,18 +1635,11 @@ else:
             st.session_state.all_range_end = dt.datetime(2022,1,1) 
             st.write("１年で +20万円利益を出してください")
 
-        if st.button('シミュレーションをはじめから始める'):
-            reset()
-            if st.session_state.account_created==True:
-                st.session_state.show_page = True
-            else:
-                st.write("アカウント情報を入力してください")
+        st.button('シミュレーションをはじめから始める',on_click=lambda: start_sym(1))
 
-        if st.button('シミュレーションを続きから始める'):
-            if st.session_state.account_created==True:
-                st.session_state.show_page = True
-            else:
-                st.write("アカウント情報を入力してください")
+
+        st.button('シミュレーションを続きから始める',on_click=lambda: start_sym(2))
+
 
     # 実績
     def page2_2():
@@ -1658,6 +1665,22 @@ else:
             del st.session_state.some_trade_advice_temp
             
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
+
+    # def create_acount():
+    #     new_data = {
+    #         "ユーザ名": st.session_state.acount_name,
+    #         "年齢": st.session_state.acount_age,
+    #         "性別": st.session_state.acount_sex,
+    #         "投資経験の有無": st.session_state.trade_expe,
+    #         "投資に関する知識の有無": st.session_state.trade_knowledge,
+    #         "開放性": st.session_state.Open,
+    #         "誠実性": st.session_state.Integrity,
+    #         "外交性": st.session_state.Diplomatic,
+    #         "協調性": st.session_state.Coordination,
+    #         "神経症傾向": st.session_state.Neuroticism
+    #     }
+    #     st.session_state.personal_df = st.session_state.personal_df.append(new_data, ignore_index=True)
+    #     change_page2(1)
 
     # アカウント画面
     def page2_3():
@@ -1708,6 +1731,7 @@ else:
             st.session_state.Coordination = st.slider("協調性", 0, 6, st.session_state.get("Coordination", 6))
             st.session_state.Neuroticism = st.slider("神経症傾向", 0, 6, st.session_state.get("Neuroticism", 6))
 
+        # st.button("スタート画面に戻る", on_click=create_acount())
 
         if st.button("スタート画面に戻る"):
             new_data = {
@@ -1724,6 +1748,8 @@ else:
             }
             st.session_state.personal_df = st.session_state.personal_df.append(new_data, ignore_index=True)
             change_page2(1)
+            
+
    # 投資について 
     def page2_4():
         st.title("投資について")
