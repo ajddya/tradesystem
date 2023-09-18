@@ -8,9 +8,9 @@ import mplfinance as mpf
 import plotly.graph_objs as go
 import datetime as dt
 
-import schedule
-from time import sleep
-import threading
+# import schedule
+# from time import sleep
+# import threading
 
 import numpy as np
 
@@ -1666,21 +1666,18 @@ else:
             
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
 
-    # def create_acount():
-    #     new_data = {
-    #         "ユーザ名": st.session_state.acount_name,
-    #         "年齢": st.session_state.acount_age,
-    #         "性別": st.session_state.acount_sex,
-    #         "投資経験の有無": st.session_state.trade_expe,
-    #         "投資に関する知識の有無": st.session_state.trade_knowledge,
-    #         "開放性": st.session_state.Open,
-    #         "誠実性": st.session_state.Integrity,
-    #         "外交性": st.session_state.Diplomatic,
-    #         "協調性": st.session_state.Coordination,
-    #         "神経症傾向": st.session_state.Neuroticism
-    #     }
-    #     st.session_state.personal_df = st.session_state.personal_df.append(new_data, ignore_index=True)
-    #     change_page2(1)
+    def create_acount():
+        st.session_state.personal_df["ユーザ名"] = st.session_state.acount_name,
+        st.session_state.personal_df["年齢"] = st.session_state.acount_age,
+        st.session_state.personal_df["性別"] = st.session_state.acount_sex,
+        st.session_state.personal_df["投資経験の有無"] = st.session_state.trade_expe,
+        st.session_state.personal_df["投資に関する知識の有無"] = st.session_state.trade_knowledge,
+        st.session_state.personal_df["開放性"] = st.session_state.Open,
+        st.session_state.personal_df["誠実性"] = st.session_state.Integrity,
+        st.session_state.personal_df["外交性"] = st.session_state.Diplomatic,
+        st.session_state.personal_df["協調性"] = st.session_state.Coordination,
+        st.session_state.personal_df["神経症傾向"] = st.session_state.Neuroticism
+        change_page2(1)
 
     # アカウント画面
     def page2_3():
@@ -1731,23 +1728,14 @@ else:
             st.session_state.Coordination = st.slider("協調性", 0, 6, st.session_state.get("Coordination", 6))
             st.session_state.Neuroticism = st.slider("神経症傾向", 0, 6, st.session_state.get("Neuroticism", 6))
 
-        # st.button("スタート画面に戻る", on_click=create_acount())
+            st.button("スタート画面に戻る",on_click=lambda: create_acount())
 
-        if st.button("スタート画面に戻る"):
-            new_data = {
-                "ユーザ名": st.session_state.acount_name,
-                "年齢": st.session_state.acount_age,
-                "性別": st.session_state.acount_sex,
-                "投資経験の有無": st.session_state.trade_expe,
-                "投資に関する知識の有無": st.session_state.trade_knowledge,
-                "開放性": st.session_state.Open,
-                "誠実性": st.session_state.Integrity,
-                "外交性": st.session_state.Diplomatic,
-                "協調性": st.session_state.Coordination,
-                "神経症傾向": st.session_state.Neuroticism
-            }
-            st.session_state.personal_df = st.session_state.personal_df.append(new_data, ignore_index=True)
-            change_page2(1)
+        else:
+            st.button("スタート画面に戻る",on_click=lambda: change_page(1))
+
+        # if st.button("スタート画面に戻る"):
+        #     st.session_state.personal_df = st.session_state.personal_df.append(new_data, ignore_index=True)
+        #     change_page2(1)
             
 
    # 投資について 
@@ -1994,5 +1982,4 @@ else:
 
     if st.session_state.page_id2 == "page2_6":
         page2_6()
-
 
