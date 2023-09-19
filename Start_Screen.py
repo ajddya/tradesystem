@@ -1451,7 +1451,10 @@ if st.session_state.show_page:
             st.session_state.result.append(Simulation_Results_instance)
             st.session_state.result_bool = True
 
-        st.button("スタート画面に戻る",on_click=end_sym())
+        # st.button("スタート画面に戻る",on_click=end_sym())
+
+        if st.button("スタート画面に戻る"):
+            st.session_state.show_page = False
 
 
     # 購入画面
@@ -1608,7 +1611,9 @@ if st.session_state.show_page:
 
     st.sidebar.write("_______________________________________________________________________________________________________")
 
-    # st.sidebar.button('シミュレーションを終了する',key='uniq_key_5', on_click=end_sym())
+    # st.sidebar.button('シミュレーションを終了する',key='uniq_key_5', on_click=end_sym()):
+    if st.sidebar.button('シミュレーションを終了する'):
+        st.session_state.show_page = False
 
     # st.session_state.show_page = True
 
