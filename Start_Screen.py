@@ -93,6 +93,12 @@ def main():
     if "categorize" not in st.session_state:
         st.session_state.categorize = pd.read_csv('categorize.csv')
 
+    if "action_type_advice" not in st.session_state:
+        st.session_state.action_type_advice = pd.read_csv('action_type_advice.csv')
+
+    if "Behavioral_Economics" not in st.session_state:
+        st.session_state.Behavioral_Economics = pd.read_csv('Behavioral_Economics.csv')
+
     if "loaded_companies" not in st.session_state:
         with open("companies.pkl", "rb") as file:
             st.session_state.loaded_companies = pickle.load(file)
@@ -1291,26 +1297,35 @@ if st.session_state.show_page:
         st.session_state.personal['性格']['外交性'] = st.session_state.Diplomatic
         st.session_state.personal['性格']['協調性'] = st.session_state.Coordination
         st.session_state.personal['性格']['神経症傾向'] = st.session_state.Neuroticism
-    
-        
-        st.subheader("全体の投資傾向について")
-        st.write("################################################################################")
-
-        st.write("投資傾向分類結果を書く")
-        st.write(f"運用成績：{benef}")
 
         classify_type_df = classify_action_type(st.session_state.personal, st.session_state.sell_log, buy_reason_ratios, sell_reason_ratios, trade_value, wield_grades)
 
         # 最も高いポイントに分類
         action_type = classify_type_df[classify_type_df['分類型']==classify_type_df['分類型'].max()].index.values[0]
+    
+        target_action_type = st.session_state.action_type_advice[st.session_state.action_type_advice["行動型"]==action_type]
+        target_action_type = target_action_type.reset_index(drop=True)
 
-        # action_type = "テクニカル分析型"
+        feature = target_action_type["特徴"][0]
+        weekness = target_action_type["欠点"][0]
+        advice_text = target_action_type["アドバイス"][0]
+
+        st.subheader("全体の投資傾向について")
+        st.write("################################################################################")
+
+        # st.write("投資傾向分類結果を書く")
+        # st.write(f"運用成績：{benef}")
 
         st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">投資行動型</p>', unsafe_allow_html=True)
-        st.markdown(f'<p style="font-family:fantasy; color:blue; font-size: 18px;">{action_type}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="font-family:fantasy; color:blue; font-size: 24px;">{action_type}</p>', unsafe_allow_html=True)
+        st.write("特徴：")
+        st.write(feature)
+        st.write("欠点：")
+        st.write(weekness)
+        st.write("アドバイス：")
+        st.write(advice_text)
 
         # checkの初期値を設定
-        # if "check" not in st.session_state:
         st.session_state.check = False
 
         check = st.checkbox("詳細な内容を表示", value = st.session_state.check)
@@ -1393,14 +1408,20 @@ if st.session_state.show_page:
             st.write("特になし")
         else:
             for i in range(0, len(st.session_state.advice_df)):
-                st.write(st.session_state.advice_df['指摘事項'][i])
+                st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.advice_df["指摘事項"][i]}</p>', unsafe_allow_html=True)
+
+                target_BE = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.advice_df['指摘事項'][i]]
+                target_BE = target_BE.reset_index(drop=True)
+                st.write(target_BE['内容'][0])
+                # st.write("アドバイス")
+                st.write(f"　→ {target_BE['アドバイス'][0]}")
 
         st.write("################################################################################")
 
-        st.subheader("改善案")
+        st.subheader("各取引について")
         st.write("################################################################################")
 
-        st.write("各種投資行動の説明を書く")
+        # st.write("各種投資行動の説明を書く")
 
         if "some_trade_advice" not in st.session_state:
             st.session_state.trade_advice_df = some_trade_advice(st.session_state.buy_log, st.session_state.sell_log)  
@@ -1422,7 +1443,12 @@ if st.session_state.show_page:
             name = target_company.name
             rdf = target_company.rdf_all[tgt_buy_day_temp:tgt_sell_day_temp]
 
-            st.write(st.session_state.trade_advice_df.iloc[i]['指摘事項'])
+
+            st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.trade_advice_df.iloc[i]["指摘事項"]}</p>', unsafe_allow_html=True)
+            target_BE2 = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.trade_advice_df.iloc[i]['指摘事項']]
+            target_BE2 = target_BE2.reset_index(drop=True)
+            st.write(target_BE2['内容'][0])
+
             if st.session_state.trade_advice_df.iloc[i]['指摘事項'] == '現在志向バイアス':
                 rdf_temp = rdf[tgt_sell_day:tgt_sell_day_temp]
                 max_date = rdf_temp[rdf_temp['Close']==rdf_temp['Close'].max()].index.values[0]
@@ -1438,6 +1464,10 @@ if st.session_state.show_page:
             else:
                 colored_text = f"利益：　<span style='font-size:20px'><span style='color:red'> +{round(tgt_benef,1)}円</span> </span>"
                 st.markdown(colored_text, unsafe_allow_html=True)
+
+            # st.write("アドバイス")
+            st.write(target_BE2['アドバイス'][0])
+
 
         st.write("################################################################################")
 
@@ -1824,22 +1854,35 @@ else:
         buy_reason_count, buy_reason_ratios = display_distribution2(bdf2['投資根拠'][0])
         sell_reason_count, sell_reason_ratios = display_distribution2(bdf['投資根拠'][0])
 
-        st.subheader("全体の投資傾向について")
-        st.write("################################################################################")
-
         classify_type_df = classify_action_type(st.session_state.personal, st.session_state.sell_log_temp, buy_reason_ratios, sell_reason_ratios, trade_value, wield_grades)
 
         # 最も高いポイントに分類
         action_type = classify_type_df[classify_type_df['分類型']==classify_type_df['分類型'].max()].index.values[0]
 
-        st.write("投資傾向分類結果を書く")
-        st.write(f"運用成績：{st.session_state.benef_temp}")
+        target_action_type = st.session_state.action_type_advice[st.session_state.action_type_advice["行動型"]==action_type]
+        target_action_type = target_action_type.reset_index(drop=True)
 
-        action_type = "テクニカル分析型"
+        feature = target_action_type["特徴"][0]
+        weekness = target_action_type["欠点"][0]
+        advice_text = target_action_type["アドバイス"][0]
+
+
+        st.subheader("全体の投資傾向について")
+        st.write("################################################################################")
+
+        # st.write("投資傾向分類結果を書く")
+        # st.write(f"運用成績：{st.session_state.benef_temp}")
+
+        # action_type = "テクニカル分析型"
 
         st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">投資行動型</p>', unsafe_allow_html=True)
-        st.markdown(f'<p style="font-family:fantasy; color:blue; font-size: 18px;">{action_type}</p>', unsafe_allow_html=True)
-
+        st.markdown(f'<p style="font-family:fantasy; color:blue; font-size: 24px;">{action_type}</p>', unsafe_allow_html=True)
+        st.write("特徴：")
+        st.write(feature)
+        st.write("欠点：")
+        st.write(weekness)
+        st.write("アドバイス：")
+        st.write(advice_text)
         st.session_state.check = False
 
         check = st.checkbox("詳細な内容を表示", value = st.session_state.check)
@@ -1922,12 +1965,19 @@ else:
             st.write("特になし")
         else:
             for i in range(0, len(st.session_state.advice_df_temp)):
-                st.write(st.session_state.advice_df_temp['指摘事項'][i])
+                # st.write(st.session_state.advice_df_temp['指摘事項'][i])
+                st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.advice_df_temp["指摘事項"][i]}</p>', unsafe_allow_html=True)
+
+                target_BE = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.advice_df_temp['指摘事項'][i]]
+                target_BE = target_BE.reset_index(drop=True)
+                st.write(target_BE['内容'][0])
+                # st.write("アドバイス")
+                st.write(f"　→ {target_BE['アドバイス'][0]}")
 
 
         st.write("################################################################################")
 
-        st.subheader("改善案")
+        st.subheader("各取引について")
         st.write("################################################################################")
 
         st.write("各種投資行動の説明を書く")
@@ -1953,7 +2003,13 @@ else:
             name = target_company.name
             rdf = target_company.rdf_all[tgt_buy_day_temp:tgt_sell_day_temp]
 
-            st.write(st.session_state.trade_advice_df_temp.iloc[i]['指摘事項'])
+            # st.write(st.session_state.trade_advice_df_temp.iloc[i]['指摘事項'])
+            st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.trade_advice_df_temp.iloc[i]["指摘事項"]}</p>', unsafe_allow_html=True)
+
+            target_BE2 = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.trade_advice_df_temp.iloc[i]['指摘事項']]
+            target_BE2 = target_BE2.reset_index(drop=True)
+            st.write(target_BE2['内容'][0])
+
             if st.session_state.trade_advice_df_temp.iloc[i]['指摘事項'] == '現在志向バイアス':
                 rdf_temp = rdf[tgt_sell_day:tgt_sell_day_temp]
                 max_date = rdf_temp[rdf_temp['Close']==rdf_temp['Close'].max()].index.values[0]
@@ -1969,6 +2025,8 @@ else:
             else:
                 colored_text = f"利益：　<span style='font-size:20px'><span style='color:red'> +{round(tgt_benef,1)}円</span> </span>"
                 st.markdown(colored_text, unsafe_allow_html=True)
+
+            st.write(f"{target_BE2['アドバイス'][0]}")
 
         st.write("################################################################################")
 
