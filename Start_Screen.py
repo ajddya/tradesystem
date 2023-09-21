@@ -8,24 +8,29 @@ import mplfinance as mpf
 import plotly.graph_objs as go
 import datetime as dt
 
-# import schedule
-# from time import sleep
-# import threading
-
 import numpy as np
 
 import random
+
+import json
 
 import pickle
 import io
 
 from functools import partial
 
+import japanize_matplotlib
+
 import matplotlib.pyplot as plt
 from scipy import stats
 
-# import warnings
-# warnings.filterwarnings('ignore')
+import sqlite3
+
+# 日本語フォントの設定
+plt.rcParams['font.family'] = 'Hiragino Maru Gothic Pro'  # または 'Hiragino Kaku Gothic Pro'
+# plt.rcParams['font.family'] = 'IPAexGothic'
+
+
 
 #企業データを格納するクラス
 class CompanyData:
@@ -49,13 +54,14 @@ class CompanyData:
 
 #シミュレーション結果を保存するクラス
 class Simulation_Results:
-    def __init__(self, dates, action_type, LEVEL, investment_result, buy_log, sell_log, advice, trade_advice):
+    def __init__(self, dates, action_type, LEVEL, investment_result, buy_log, sell_log, Dividends, advice, trade_advice):
         self.dates = dates                             #実施日
         self.action_type = action_type                 #行動型
         self.LEVEL = LEVEL                             #保有金額
         self.investment_result = investment_result     #投資結果（利益）
         self.buy_log = buy_log                         #購入ログ
         self.sell_log = sell_log                       #売却ログ
+        self.Dividends = Dividends                     #配当に関するデータ
         self.advice = advice                           #行動経済学の指摘事項
         self.trade_advice = trade_advice               #各取引の指摘事項
         self._observers = []
@@ -74,21 +80,17 @@ class Simulation_Results:
 #____________________________初期値を代入する関数________________________________________
  #全体の期間を指定
 all_range_start = dt.datetime(2020,9,1)
-# all_range_end = dt.datetime(2021,3,31)
+# all_range_end = dt.datetime(2022,3,31)
 now_range = dt.datetime(2021,1,1)
 # now = dt.datetime(2021,1,1)
 
 i_max = 20
 
-# s = 2
-# hread = None  # スレッドを格納するための変数
-
-
-#再定義したくない変数
+#変数の初期値
 def main():
     # データ読み込み
     if "c_master" not in st.session_state:
-        st.session_state.c_master = pd.read_csv('company_list2.csv')
+        st.session_state.c_master = pd.read_csv('company_list3.csv')
 
     if "categorize" not in st.session_state:
         st.session_state.categorize = pd.read_csv('categorize.csv')
@@ -103,11 +105,11 @@ def main():
         with open("companies.pkl", "rb") as file:
             st.session_state.loaded_companies = pickle.load(file)
 
+    if "account_created" not in st.session_state:
+        st.session_state.account_created = False
+
     if "personal" not in st.session_state:
         st.session_state.personal = pd.DataFrame(columns=['性格'], index=['新規性', '誠実性', '外交性', '協調性', '神経症傾向'])
-
-    if "personal_temp" not in st.session_state:
-        st.session_state.personal_temp = pd.DataFrame(columns=['性格'], index=['新規性', '誠実性', '外交性', '協調性', '神経症傾向'])
 
     if "now" not in st.session_state:
         st.session_state.now = dt.datetime(2021,1,4)
@@ -143,6 +145,9 @@ def main():
     if "sell_log_temp" not in st.session_state:
         st.session_state.sell_log_temp = pd.DataFrame(columns=['企業名', '年月', '売却根拠', '売却株式数', '利益', '属性'])
 
+    if "Dividends_df" not in st.session_state:
+        st.session_state.Dividends_df = pd.DataFrame(columns=['企業名', '属性', '配当金', "配当基準日", "実施"])
+
     if "benef_temp" not in st.session_state:
         st.session_state.benef_temp = 0
 
@@ -156,7 +161,10 @@ def main():
         st.session_state.FS_df = pd.DataFrame(columns=['2020','2021'],index=['1株当たりの当期純利益','PER','1株当たりの純資産','PBR','ROA','ROE','自己資本比率'])
 
     if "div_df" not in st.session_state:
-        st.session_state.div_df = pd.DataFrame(columns=['2020','2021'],index=['配当性向', '配当利回り', "配当金額", "配当基準日"])
+        st.session_state.div_df = pd.DataFrame(columns=['2020','2021'],index=['配当性向', '配当利回り'])
+
+    if "div_df2" not in st.session_state:
+        st.session_state.div_df2 = pd.DataFrame(columns=['中間','期末'],index=['金額', '配当権利付き最終日', "配当基準日"])
 
     if "trade_advice_df" not in st.session_state:
         st.session_state.trade_advice_df = pd.DataFrame(columns=['企業名', '指摘事項'])
@@ -176,9 +184,6 @@ def main():
 
     if "result" not in st.session_state:
         st.session_state.result = [] 
-
-    if "system_end" not in st.session_state:
-        st.session_state.system_end = False
 
 if "main_executed" not in st.session_state:
     main()  # main関数を実行
@@ -312,13 +317,7 @@ def add_next_day(num):
     
     st.session_state.now = next_day
 
-#________________________________再生・停止ボタンに関するコード___________________________________________
-##############################################################################################################################
-
-##############################################################################################################################
-
 #_______________________________買い・売りボタンの設定___________________________________
-#買いボタン
 def buy(name, rdf_all):
 
     #保有株式数と１株あたりの株価の初期値
@@ -369,11 +368,13 @@ def buy(name, rdf_all):
             possess_KK_df_temp['1株あたりの株価'] = [round(possess_KK_avg,1)]
             possess_KK_df_temp['利益'] = [benefit]
             st.session_state.possess_KK_df = pd.concat([st.session_state.possess_KK_df,possess_KK_df_temp],ignore_index=True)
+
+        buy_now_str = st.session_state.now.strftime('%Y/%m/%d')
             
         #データログにデータを追加
         buy_log_temp = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '属性'])
         buy_log_temp['企業名'] = [name]
-        buy_log_temp['年月'] = [st.session_state.now]
+        buy_log_temp['年月'] = [buy_now_str]
         buy_log_temp['購入根拠'] = [st.session_state.Rationale_for_purchase]
         buy_log_temp['購入株式数'] = [st.session_state.buy_num ]
         buy_amount = now_data_KK * st.session_state.buy_num
@@ -426,10 +427,11 @@ def sell(name, rdf_all):
             st.session_state.possess_KK_df = st.session_state.possess_KK_df[st.session_state.possess_KK_df['保有株式数']!=0]
             st.session_state.possess_KK_df = st.session_state.possess_KK_df.reset_index(drop=True)
             
+            sell_now_str = st.session_state.now.strftime('%Y/%m/%d')
                     
             sell_log_temp = pd.DataFrame(columns=['企業名', '年月', '売却根拠', '売却株式数', '利益','属性'])
             sell_log_temp['企業名'] = [name]
-            sell_log_temp['年月'] = [st.session_state.now]
+            sell_log_temp['年月'] = [sell_now_str]
             sell_log_temp['売却根拠'] = [st.session_state.basis_for_sale]
             sell_log_temp['売却株式数'] = [st.session_state.sell_num]
             sell_log_temp['利益'] = [benefit]
@@ -442,6 +444,7 @@ def sell(name, rdf_all):
             change_page(2)
 
 #_______________________________評価用基本統計・ヒストグラムの設定___________________________________
+# 取引量、利益の基本統計量を作成
 def display_distribution(data):
     # 日本語フォントの設定
     font_path = "/Users/tatematsukenichirou/Desktop/my_page/卒研/研究（株価）/デモトレード/program/ipaexg00401/ipaexg.ttf"
@@ -477,7 +480,7 @@ def display_distribution(data):
 
     return stats_df
 
-#購入・売却根拠の統計量、ヒストグラム作成
+# 購入・売却根拠の統計量、ヒストグラム作成
 def display_distribution2(data):
     # 日本語フォントの設定
     plt.rcParams['font.family'] = 'IPAexGothic'
@@ -496,7 +499,7 @@ def display_distribution2(data):
 
     return value_counts, value_ratios
 
-#各取引のアドバイス生成#_____________________________________________________________________________________________________________________________
+# 各取引のアドバイス生成#_____________________________________________________________________________________________________________________________
 def some_trade_advice(buy_log, sell_log):
     trade_advice_df = pd.DataFrame(columns=['企業名', '指摘事項'])
     trade_advice_df_temp = pd.DataFrame(columns=['企業名', '指摘事項'])
@@ -529,6 +532,7 @@ def some_trade_advice(buy_log, sell_log):
     present_oriented_df = pd.DataFrame()
     for i in range(0, len(pluss_benef_df)):
         pbd_sell_day = pluss_benef_df.iloc[i]['年月']
+        pbd_sell_day = dt.datetime.strptime(pbd_sell_day, "%Y/%m/%d")
         end_date = pbd_sell_day + dt.timedelta(days=30)
         pbd_com_name = pluss_benef_df.iloc[i]['企業名']
         index = st.session_state.c_master.loc[(st.session_state.c_master['企業名']==pbd_com_name)].index.values[0]
@@ -557,8 +561,10 @@ def some_trade_advice(buy_log, sell_log):
     minas_seqence_df = pd.DataFrame()
     for i in range(0,len(minas_benef_df)):
         mbd_sell_day = minas_benef_df.iloc[i]['年月']
+        mbd_sell_day = dt.datetime.strptime(mbd_sell_day, "%Y/%m/%d")
         mbd_com_name = minas_benef_df.iloc[i]['企業名']
         mbd_buy_day = buy_log[buy_log['企業名']==mbd_com_name]['年月'].iloc[-1]
+        mbd_buy_day = dt.datetime.strptime(mbd_buy_day, "%Y/%m/%d")
 
         index = st.session_state.c_master.loc[(st.session_state.c_master['企業名']==mbd_com_name)].index.values[0]
         in_trade_rdf = st.session_state.loaded_companies[index].rdf_all[mbd_buy_day : mbd_sell_day]
@@ -595,7 +601,6 @@ def some_trade_advice(buy_log, sell_log):
         trade_advice_df = pd.concat([trade_advice_df,trade_advice_df_temp], ignore_index=True)
         
     return trade_advice_df
-
 
 #投資行動に関するアドバイス生成
 def advice(buy_reason_ratios, buy_log, sell_log):
@@ -642,10 +647,18 @@ def advice(buy_reason_ratios, buy_log, sell_log):
     #テンションリダクション　利益最大の銘柄の売却後に２つ以上の銘柄を購入しているときに指摘
     sell_day = sell_log[sell_log["利益"]==sell_log["利益"].max()]["年月"].iloc[0]
 
+    sell_day = dt.datetime.strptime(sell_day, "%Y/%m/%d")
+
     start_date = sell_day
     end_date = sell_day + pd.Timedelta(days=3)
 
-    df_temp = buy_log[(buy_log['年月'] >= start_date) & (buy_log['年月'] <= end_date)]
+
+    buy_log_temp = buy_log.copy()
+    for i in range(0, len(buy_log)):
+        buy_log_temp['年月'].iloc[i] = dt.datetime.strptime(buy_log_temp['年月'].iloc[i], "%Y/%m/%d")
+
+
+    df_temp = buy_log_temp[(buy_log_temp['年月'] >= start_date) & (buy_log_temp['年月'] <= end_date)]
 
     # インデックスをリセット
     df_temp = df_temp.reset_index(drop=True)
@@ -681,10 +694,7 @@ def advice(buy_reason_ratios, buy_log, sell_log):
 
     return advice_df
 
-
-#___________________________________________________________________________________________________________________________________________________________________________________________________________
-#分類型の関数作成#___________________________________________________________________________________________________________________________________________________________________________________________________________
-
+# 分類型の関数作成#___________________________________________________________________________________________________________________________________________________________________________________________________________
 # 分類する関数
 def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_ratios, trade_value, wield_grades):
 
@@ -707,13 +717,14 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
 
         for character_min in min_character_list:
             categorize_temp_temp = categorize_temp[categorize_temp['min']==character_min]
-            categorize_index = categorize_temp_temp.index.values[0]
+            if not categorize_temp_temp.empty:
+                categorize_index = categorize_temp_temp.index.values[0]
 
-            Conservative += st.session_state.categorize["保守型"][categorize_index] * 2
-            Research += st.session_state.categorize["リサーチ主導型"][categorize_index]
-            Positive += st.session_state.categorize["積極型"][categorize_index]
-            Emotion += st.session_state.categorize["感情主導型"][categorize_index]
-            Technical += st.session_state.categorize["テクニカル"][categorize_index] * 2
+                Conservative += st.session_state.categorize["保守型"][categorize_index] * 2
+                Research += st.session_state.categorize["リサーチ主導型"][categorize_index]
+                Positive += st.session_state.categorize["積極型"][categorize_index]
+                Emotion += st.session_state.categorize["感情主導型"][categorize_index]
+                Technical += st.session_state.categorize["テクニカル"][categorize_index] * 2
 
     Conservative /= character_count
     Research /= character_count
@@ -756,15 +767,16 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
         
     # 投資根拠のデータから分類型にポイントを与える
     # 各分類型の購入根拠
-    buy_reason_Conservative = ["業績が安定している", "リスクが小さい"]
-    buy_reason_Research = ["利回りがいい"]
+    buy_reason_Conservative = ["業績が安定している", "リスクが小さい", "配当目当て"]
+    buy_reason_Research = ["利回りがいい", "財務データ"]
     buy_reason_Positive = ["全体的な景気"]
+    buy_reason_Emotion = ["直感"]
     buy_reason_Technical = ["チャート形状", "過去の経験から"]
     # 各分類型の売却根拠
     sell_reason_Conservative = ["利益確定売り"]
-    sell_reason_Research = ["財務データ"]
+    sell_reason_Research = []
     sell_reason_Positive = ["全体的な景気"]
-    sell_reason_Emotion = ["チャート形状"]
+    sell_reason_Emotion = ["チャート形状", "直感"]
     sell_reason_Technical = ["チャート形状", "過去の経験から"]
     
 
@@ -775,6 +787,8 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
             Research += (buy_reason_ratios[buy_reason] )
         if buy_reason in buy_reason_Positive:
             Positive += (buy_reason_ratios[buy_reason] / 2)
+        if buy_reason in buy_reason_Emotion:
+            Emotion += (buy_reason_ratios[buy_reason] / 2)
         if buy_reason in buy_reason_Technical:
             Technical += (buy_reason_ratios[buy_reason])
 
@@ -786,7 +800,7 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
         if sell_reason in sell_reason_Positive:
             Positive += (sell_reason_ratios[sell_reason] / 2)
         if sell_reason in sell_reason_Emotion:
-            Emotion += (sell_reason_ratios[sell_reason])        
+            Emotion += (sell_reason_ratios[sell_reason] / 2)        
         if sell_reason in sell_reason_Technical:
             Technical += (sell_reason_ratios[sell_reason])
             
@@ -819,7 +833,58 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
 
     return classify_type    
 
-#___________________________________________________________________________________________________________________________________________________________________________________________________________
+# データベースに保存する関数作成_______________________________________________________________________________________________________________________________________________________________________________________________________
+# データの挿入
+def insert_data_to_db(private_data, result_data):
+    # データベースに接続
+    conn = sqlite3.connect('Trade_Simulate.db')
+    c = conn.cursor()
+
+    # テーブルの削除
+    # c.execute("drop table user_data")
+
+    # テーブルの作成（初回のみ）
+    c.execute('CREATE TABLE IF NOT EXISTS user_data(private_data, result_data)')
+
+    private_data_serialized = private_data.to_json()
+    result_data_serialized = result_data.to_json()
+
+    # データの挿入
+    c.execute('INSERT INTO user_data (private_data, result_data) VALUES (?, ?)', (private_data_serialized, result_data_serialized))
+    conn.commit()
+
+    # カーソルをクローズ（オプション）
+    c.close()
+
+    # データベースの接続をクローズ
+    conn.close()
+
+# データの確認
+def check_db():
+        # データベースに接続
+        conn = sqlite3.connect('Trade_Simulate.db')
+        c = conn.cursor()
+
+        c.execute('SELECT * FROM user_data ')
+        # data = c.fetchone()
+
+        for row in c:
+            serialized_data = row[0]
+            serialized_data_1 = row[1]
+
+            deserialized_data = pd.read_json(serialized_data)
+            st.write(deserialized_data)
+
+            deserialized_data_1 = pd.read_json(serialized_data_1)
+            st.write(deserialized_data_1)
+
+        # カーソルをクローズ（オプション）
+        c.close()
+
+        # データベースの接続をクローズ
+        conn.close()
+
+# システム管理_______________________________________________________________________________________________________________________________________________________________________
 
 def reset():
     if "main_executed" in st.session_state:
@@ -855,8 +920,8 @@ def reset():
     if "sell_log" in st.session_state:
         del st.session_state.sell_log
 
-    if "system_end" in st.session_state:
-        del st.session_state.system_end
+    if "Dividends_df" in st.session_state:
+        del st.session_state.Dividends_df
 
     if "page_id" in st.session_state:
         del st.session_state.page_id
@@ -886,14 +951,14 @@ def start_sym(n):
         if st.session_state.account_created==True:
             st.session_state.show_page = True
         else:
-            st.write("アカウント情報を入力してください")
+            st.sidebar.write("アカウント情報を入力してください")
 
     # 続きから始めるボタン
     if n == 2:
         if st.session_state.account_created==True:
             st.session_state.show_page = True
         else:
-            st.write("アカウント情報を入力してください")
+            st.sidebar.write("アカウント情報を入力してください")
 
 def change_page(num, name=None):
     if name:
@@ -908,9 +973,6 @@ def change_page_to_result(buy_log, sell_log, possess_money):
     st.session_state.show_page = True
     st.session_state.page_id = "page5"
 
-# def change_page2(num):
-#     st.session_state["page-select2"] = f"page2_{num}"
-
 def change_page2(num, buy_log=None, sell_log=None, benef=None):
     if buy_log is not None and not buy_log.empty:
         st.session_state.buy_log_temp = buy_log
@@ -924,7 +986,6 @@ def change_page2(num, buy_log=None, sell_log=None, benef=None):
 
 # 全体の期間を超えた場合はループを終了
 if st.session_state.now > st.session_state.all_range_end:
-    st.session_state.system_end = True
     change_page(5)
 
 if st.session_state.now > st.session_state.all_range_end:
@@ -946,6 +1007,37 @@ for i in range(0, len(st.session_state.possess_KK_df)):
     target_company_temp2 = st.session_state.loaded_companies[index_temp]
     st.session_state.possess_KK_df['現在の株価'][i] = target_company_temp2.rdf_all['Close'][st.session_state.now]
     st.session_state.possess_KK_df['利益'][i] = (st.session_state.possess_KK_df['現在の株価'][i] - st.session_state.possess_KK_df['1株あたりの株価'][i]) * st.session_state.possess_KK_df['保有株式数'][i]
+
+    # 配当関係の処理
+    target_company_temp3 = st.session_state.c_master.iloc[index_temp]
+    half_right_day = dt.datetime.strptime(target_company_temp3["中間配当権利付き最終日"], "%Y/%m/%d")
+    half_base_day = dt.datetime.strptime(target_company_temp3["中間配当基準日"], "%Y/%m/%d")
+    right_day = dt.datetime.strptime(target_company_temp3["期末配当権利付き最終日"], "%Y/%m/%d")
+    base_day = dt.datetime.strptime(target_company_temp3["期末配当基準日"], "%Y/%m/%d")
+    # nowが中間配当権利付き最終日の場合の処理
+    if st.session_state.now == half_right_day:
+        Dividends_df_temp = pd.DataFrame(columns=['企業名', '属性', '配当金', '配当基準日', '実施'])
+        Dividends_df_temp['企業名'] = target_company_temp3['企業名']
+        Dividends_df_temp['属性'] = '中間'
+        Dividends_df_temp['配当金'] = target_company_temp3['中間配当'] * st.session_state.possess_KK_df['保有株式数'][i]
+        Dividends_df_temp['配当基準日'] = half_base_day
+        Dividends_df_temp['実施'] = False
+        st.session_state.Dividends_df = pd.concat([st.session_state.Dividends_df, Dividends_df_temp], ignore_index=True)
+
+    # nowが期末配当権利付き最終日の場合の処理
+    if st.session_state.now == right_day:
+        Dividends_df_temp = pd.DataFrame(columns=['企業名', '属性', '配当金', '配当基準日', '実施'])
+        Dividends_df_temp['企業名'] = target_company_temp3['企業名']
+        Dividends_df_temp['属性'] = '期末'
+        Dividends_df_temp['配当金'] = target_company_temp3['期末配当'] * st.session_state.possess_KK_df['保有株式数'][i]
+        Dividends_df_temp['配当基準日'] = base_day
+        Dividends_df_temp['実施'] = False
+        st.session_state.Dividends_df = pd.concat([st.session_state.Dividends_df, Dividends_df_temp], ignore_index=True)
+
+if st.session_state.now in st.session_state.Dividends_df["配当基準日"]:
+    st.session_state.possess_money += st.session_state.Dividends_df[st.session_state.Dividends_df["配当基準日"]==st.session_state.now]["配当金"].sum()
+    st.session_state.Dividends_df['実施'] = True
+
 
 button_css1 = f"""
     <style>
@@ -1040,52 +1132,9 @@ if st.session_state.show_page:
 
         st.button("保有株式へ", on_click=lambda: change_page(3))
 
-        st.session_state.show_page = True
-
-
     # トレード画面
     def page2():
         st.title("トレード画面")
-
-        # col1, col2 = st.columns((5, 5))
-        # with col1:
-        #     # st.markdown('<div id="button1"></div>', unsafe_allow_html=True)
-        #     button_css1 = f"""
-        #     <style>
-        #         div.stButton > button:first-child  {{
-        #         color        : white               ;
-        #         width        : 100%                ;
-        #         font-weight  : bold                ;/* 文字：太字                   */
-        #         border       : 1px solid #000      ;/* 枠線：ピンク色で5ピクセルの実線 */
-        #         border-radius: 1px 1px 1px 1px     ;/* 枠線：半径10ピクセルの角丸     */
-        #         background   : #a9a9a9             ;/* 背景色：薄いグレー            */
-        #     }}
-        #     </style>
-        #     """
-        #     st.markdown(button_css1, unsafe_allow_html=True)
-        #     action = st.button("一日進める", on_click=lambda: add_next_day(1))
-
-        # with col2:
-        #     # st.markdown('<div id="button2"></div>', unsafe_allow_html=True)
-        #     button_css2 = f"""
-        #     <style>
-        #         div.stButton > button:first-child  {{
-        #         color        : white               ;
-        #         padding      : 14px 20px           ;
-        #         margin       : 8px 0               ;
-        #         width        : 100%                ;
-        #         cursor       : pointer             ;
-        #         font-weight  : bold                ;/* 文字：太字                   */
-        #         border       : 1px solid #000      ;/* 枠線：ピンク色で5ピクセルの実線 */
-        #         border-radius: 1px 1px 1px 1px     ;/* 枠線：半径10ピクセルの角丸     */
-        #         background   : #a9a9a9            ;/* 背景色：薄いグレー            */
-        #     }}
-        #     </style>
-        #     """
-        #     st.markdown(button_css2, unsafe_allow_html=True)
-        #     action2 = st.button("一週間進める", on_click=lambda: add_next_day(7))
-
-        # st.write(f"now = {st.session_state.now}")
 
         st.write("_______________________________________________________________________________________________________")
 
@@ -1117,39 +1166,8 @@ if st.session_state.show_page:
 
         col3, col4 = st.columns((5, 5))
         with col3:
-            st.markdown('<div id="button3"></div>', unsafe_allow_html=True)
-            button_css3 = f"""
-            <style>
-                div.stButton > button:first-child  {{
-                color        : white               ;
-                padding      : 14px 20px           ;
-                margin       : 8px 0               ;
-                width        : 100%                ;
-                cursor       : pointer             ;
-                font-weight  : bold                ;/* 文字：太字                   */
-                border       : 1px solid #000      ;/* 枠線：ピンク色で5ピクセルの実線 */
-                border-radius: 1px 1px 1px 1px     ;/* 枠線：半径10ピクセルの角丸     */
-                background   : #a9a9a9            ;/* 背景色：薄いグレー            */
-            }}
-            </style>
-            """
-            st.markdown(button_css3, unsafe_allow_html=True)
             action = st.button("買う", on_click=lambda: change_page(6))
         with col4:
-            st.markdown('<div id="button4"></div>', unsafe_allow_html=True)
-            button_css4 = f"""
-            <style>
-                #button4 + div.stButton > button:first-child  {{
-                color        : white               ;
-                width        : 100%   !important             ;
-                font-weight  : bold                ;/* 文字：太字                   */
-                border       : 1px solid #000      ;/* 枠線：ピンク色で5ピクセルの実線 */
-                border-radius: 1px 1px 1px 1px     ;/* 枠線：半径10ピクセルの角丸     */
-                background   : #2e8b57            ;/* 背景色：薄いグレー            */
-                }}
-            </style>
-            """
-            st.markdown(button_css4, unsafe_allow_html=True)
             action = st.button("売る", on_click=lambda: change_page(7))
 
         st.write("_______________________________________________________________________________________________________")
@@ -1162,8 +1180,6 @@ if st.session_state.show_page:
         else:
             st.write("現在保有している株式") 
             st.dataframe(st.session_state.possess_KK_df)
-
-        st.session_state.show_page = True
 
 
     # 保有株式画面
@@ -1180,8 +1196,6 @@ if st.session_state.show_page:
 
         st.button("選択可能銘柄一覧へ戻る",on_click=lambda: change_page(1))
 
-        st.session_state.show_page = True
-
 
     # 企業情報画面
     def page4():
@@ -1197,13 +1211,21 @@ if st.session_state.show_page:
 
         index = st.session_state.c_master[st.session_state.c_master['企業名'] == name].index.values[0]
 
-        for i in range(2018,2022):
+        # pd.set_option('display.max_colwidth', 100)
+
+        Financial_anounce_day = dt.datetime.strptime(st.session_state.c_master["短信決算発表日"][index], "%Y/%m/%d")
+
+        year = 2021
+        if Financial_anounce_day <= st.session_state.now:
+            year = 2022
+
+        for i in range(2018,year):
             st.session_state.sales_df['売上'].loc[f'{i}'] = st.session_state.c_master[f'{i}売上'][index]
             st.session_state.sales_df['営業利益'].loc[f'{i}'] = st.session_state.c_master[f'{i}営業利益'][index]
             st.session_state.sales_df['当期利益'].loc[f'{i}'] = st.session_state.c_master[f'{i}当期利益'][index]
             st.session_state.sales_df['基本的1株当たりの当期利益'].loc[f'{i}'] = st.session_state.c_master[f'{i}基本的1株当たり当期利益'][index]
 
-        for i in range(2020,2022):
+        for i in range(2020,year):
             st.session_state.CF_df['営業CF'].loc[f'{i}'] = st.session_state.c_master[f'{i}営業CF'][index]
             st.session_state.CF_df['投資CF'].loc[f'{i}'] = st.session_state.c_master[f'{i}投資CF'][index]
             st.session_state.CF_df['財務CF'].loc[f'{i}'] = st.session_state.c_master[f'{i}財務CF'][index]
@@ -1221,6 +1243,14 @@ if st.session_state.show_page:
             st.session_state.FS_df[f'{i}'].loc['自己資本比率'] = st.session_state.c_master[f'{i}自己資本比率'][index]
 
             st.session_state.div_df[f'{i}'].loc['配当性向'] = st.session_state.c_master[f'{i}配当性向'][index]
+            st.session_state.div_df[f'{i}'].loc['配当利回り'] = st.session_state.c_master[f'{i}配当利回り'][index]
+
+        st.session_state.div_df2['中間'].loc['金額'] = st.session_state.c_master['中間配当'][index]
+        st.session_state.div_df2['期末'].loc['金額'] = st.session_state.c_master['期末配当'][index]
+        st.session_state.div_df2['中間'].loc['配当権利付き最終日'] = st.session_state.c_master['中間配当権利付き最終日'][index]
+        st.session_state.div_df2['期末'].loc['配当権利付き最終日'] = st.session_state.c_master['期末配当権利付き最終日'][index]
+        st.session_state.div_df2['中間'].loc['配当基準日'] = st.session_state.c_master['中間配当基準日'][index]
+        st.session_state.div_df2['期末'].loc['配当基準日'] = st.session_state.c_master['期末配当基準日'][index]
 
         st.subheader(f"{name}の企業情報")
 
@@ -1230,28 +1260,51 @@ if st.session_state.show_page:
         # 選択されたページに基づいて内容を表示
         if selected_page == "業績":
             st.write('売上推移')
-            st.dataframe(st.session_state.sales_df)
+            st.write(st.session_state.sales_df)
+
+            for i in range(2018,year):
+                st.session_state.sales_df['売上'].loc[f'{i}'] = float(st.session_state.c_master[f'{i}売上'][index].replace(',',''))
+
+            fig, ax1 = plt.subplots(figsize=(10,6))
+
+            # 売上を棒グラフで表示
+            ax1.bar(st.session_state.sales_df.index, st.session_state.sales_df['売上'], color='blue', alpha=0.6, label='売上')
+            ax1.set_xlabel('年')
+            ax1.set_ylabel('売上')
+            ax1.tick_params(axis='y', labelcolor='blue')
+
+            # y軸の最小値をデータの最小値より300,000低く設定
+            min_value = st.session_state.sales_df['売上'].min()
+            ax1.set_ylim([min_value * 0.9, ax1.get_ylim()[1]])
+
+            ax1.legend(loc="upper left")
+            plt.title('売上の推移')
+            plt.tight_layout()
+            st.pyplot(fig)
+
 
         elif selected_page == "財務情報":
             st.write('キャッシュフロー')
-            st.dataframe(st.session_state.CF_df)
+            st.write(st.session_state.CF_df)
             st.write('財務諸表')
-            st.dataframe(st.session_state.FS_df)
+            st.write(st.session_state.FS_df)
+
+            st.write(f"短信決算発表日：{st.session_state.c_master['短信決算発表日'][index]}")
 
         elif selected_page == "配当":
             st.write('配当')
-            st.dataframe(st.session_state.div_df)
+            st.write(st.session_state.div_df)
+            st.write(st.session_state.div_df2)
 
         elif selected_page == "アナリスト分析":
             st.write('アナリスト分析の内容')
             # ここに該当するデータや情報を表示
 
-        st.session_state.show_page = True
-
 
     # 結果画面
     def page5():
         st.title("結果画面")
+
         st.header(f"{st.session_state.acount_name}さんの結果")
         # 現在時刻を終了時間に合わせる
         st.session_state.now = st.session_state.all_range_end
@@ -1268,224 +1321,257 @@ if st.session_state.show_page:
             colored_text = f"あなたは　<span style='font-size:30px'><span style='color:red'> +{round(benef,1)}円</span> </span>の利益を出しました。"
             st.markdown(colored_text, unsafe_allow_html=True)
 
-        # ユーザからの情報をデータフレームとして受け取る
-        behavioral_sell_data = {
-            "取引回数": [len(st.session_state.sell_log)], 
-            "投資根拠": [st.session_state.sell_log['売却根拠']],
-            "運用成績": [st.session_state.sell_log['利益']],  
-            "取引株式数": [st.session_state.sell_log['売却株式数']]
-        }
-        bdf = pd.DataFrame(behavioral_sell_data)
+        if not st.session_state.sell_log.empty:
+            # ユーザからの情報をデータフレームとして受け取る
+            behavioral_sell_data = {
+                "取引回数": [len(st.session_state.sell_log)], 
+                "投資根拠": [st.session_state.sell_log['売却根拠']],
+                "運用成績": [st.session_state.sell_log['利益']],  
+                "取引株式数": [st.session_state.sell_log['売却株式数']]
+            }
+            bdf = pd.DataFrame(behavioral_sell_data)
 
-        # ユーザからの情報をデータフレームとして受け取る
-        behavioral_buy_data = {
-            "取引回数": [len(st.session_state.buy_log)],  # 1年間の取引回数
-            "投資根拠": [st.session_state.buy_log['購入根拠']],
-            "取引量": [st.session_state.buy_log['購入金額']]
-        }
-        bdf2 = pd.DataFrame(behavioral_buy_data)
+            # ユーザからの情報をデータフレームとして受け取る
+            behavioral_buy_data = {
+                "取引回数": [len(st.session_state.buy_log)],  # 1年間の取引回数
+                "投資根拠": [st.session_state.buy_log['購入根拠']],
+                "取引量": [st.session_state.buy_log['購入金額']]
+            }
+            bdf2 = pd.DataFrame(behavioral_buy_data)
 
-        trade_value = display_distribution(bdf2['取引量'][0])
-        wield_grades = display_distribution(bdf['運用成績'][0])
+            trade_value = display_distribution(bdf2['取引量'][0])
+            wield_grades = display_distribution(bdf['運用成績'][0])
+            
+            buy_reason_count, buy_reason_ratios = display_distribution2(bdf2['投資根拠'][0])
+            sell_reason_count, sell_reason_ratios = display_distribution2(bdf['投資根拠'][0])
+
+            #個人の性格情報から分類型にポイントを与える
+            st.session_state.personal['性格']['新規性'] = st.session_state.Open
+            st.session_state.personal['性格']['誠実性'] = st.session_state.Integrity
+            st.session_state.personal['性格']['外交性'] = st.session_state.Diplomatic
+            st.session_state.personal['性格']['協調性'] = st.session_state.Coordination
+            st.session_state.personal['性格']['神経症傾向'] = st.session_state.Neuroticism
+
+            classify_type_df = classify_action_type(st.session_state.personal, st.session_state.sell_log, buy_reason_ratios, sell_reason_ratios, trade_value, wield_grades)
+
+            # 最も高いポイントに分類
+            action_type = classify_type_df[classify_type_df['分類型']==classify_type_df['分類型'].max()].index.values[0]
         
-        buy_reason_count, buy_reason_ratios = display_distribution2(bdf2['投資根拠'][0])
-        sell_reason_count, sell_reason_ratios = display_distribution2(bdf['投資根拠'][0])
+            target_action_type = st.session_state.action_type_advice[st.session_state.action_type_advice["行動型"]==action_type]
+            target_action_type = target_action_type.reset_index(drop=True)
 
-        #個人の性格情報から分類型にポイントを与える
-        st.session_state.personal['性格']['新規性'] = st.session_state.Open
-        st.session_state.personal['性格']['誠実性'] = st.session_state.Integrity
-        st.session_state.personal['性格']['外交性'] = st.session_state.Diplomatic
-        st.session_state.personal['性格']['協調性'] = st.session_state.Coordination
-        st.session_state.personal['性格']['神経症傾向'] = st.session_state.Neuroticism
+            feature = target_action_type["特徴"][0]
+            weekness = target_action_type["欠点"][0]
+            advice_text = target_action_type["アドバイス"][0]
 
-        classify_type_df = classify_action_type(st.session_state.personal, st.session_state.sell_log, buy_reason_ratios, sell_reason_ratios, trade_value, wield_grades)
-
-        # 最も高いポイントに分類
-        action_type = classify_type_df[classify_type_df['分類型']==classify_type_df['分類型'].max()].index.values[0]
-    
-        target_action_type = st.session_state.action_type_advice[st.session_state.action_type_advice["行動型"]==action_type]
-        target_action_type = target_action_type.reset_index(drop=True)
-
-        feature = target_action_type["特徴"][0]
-        weekness = target_action_type["欠点"][0]
-        advice_text = target_action_type["アドバイス"][0]
-
-        st.subheader("全体の投資傾向について")
-        st.write("################################################################################")
-
-        # st.write("投資傾向分類結果を書く")
-        # st.write(f"運用成績：{benef}")
-
-        st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">投資行動型</p>', unsafe_allow_html=True)
-        st.markdown(f'<p style="font-family:fantasy; color:blue; font-size: 24px;">{action_type}</p>', unsafe_allow_html=True)
-        st.write("特徴：")
-        st.write(feature)
-        st.write("欠点：")
-        st.write(weekness)
-        st.write("アドバイス：")
-        st.write(advice_text)
-
-        # checkの初期値を設定
-        st.session_state.check = False
-
-        check = st.checkbox("詳細な内容を表示", value = st.session_state.check)
-        if check:
-            st.write("################################################################################")
-            st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">個人の性格</p>', unsafe_allow_html=True)
-            st.write(st.session_state.personal)
-
-            st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">取引量</p>', unsafe_allow_html=True)
-            #各統計量表示
-            st.dataframe(trade_value)
-            # ヒストグラムを作成
-            fig, ax = plt.subplots()
-            ax.hist(bdf2['取引量'][0], bins=10, color='blue', alpha=0.7, edgecolor='black')
-            ax.set_title('trade value histglam')
-            ax.set_xlabel('buy amount of one trade')
-            ax.set_ylabel('count')
-            # Streamlitでヒストグラムを表示
-            st.pyplot(fig)
-
-            st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">運用成績</p>', unsafe_allow_html=True)
-            #各統計量表示
-            st.dataframe(wield_grades)
-            # ヒストグラムを作成
-            fig, ax = plt.subplots()
-            ax.hist(bdf['運用成績'][0], bins=10, color='blue', alpha=0.7, edgecolor='black')
-            ax.set_title('benefit histglam')
-            ax.set_xlabel('benefit')
-            ax.set_ylabel('count')
-            # Streamlitでヒストグラムを表示
-            st.pyplot(fig)
-
-            st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">購入根拠</p>', unsafe_allow_html=True)
-            # 統計量を表示
-            col_b1, col_b2 = st.columns((4, 6))
-            with col_b1:
-                st.write("\n各カテゴリのカウント:")
-                st.write(buy_reason_count)
-
-                st.write("\n各カテゴリの割合:")
-                st.write(buy_reason_ratios)
-
-            with col_b2:
-                # 円グラフを作成
-                fig, ax = plt.subplots()
-                ax.pie(buy_reason_ratios, labels=buy_reason_ratios.index, autopct='%1.1f%%', startangle=90)
-                ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-
-                # Streamlitに表示
-                st.pyplot(fig)
-
-            st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">売却根拠</p>', unsafe_allow_html=True)
-            # 統計量を表示
-            col_s1, col_s2 = st.columns((4, 6))
-            with col_s1:
-                st.write("\n各カテゴリのカウント:")
-                st.write(sell_reason_count)
-
-                st.write("\n各カテゴリの割合:")
-                st.write(sell_reason_ratios)
-                
-            with col_s2:
-                # 円グラフを作成
-                fig, ax = plt.subplots()
-                ax.pie(sell_reason_ratios, labels=sell_reason_ratios.index, autopct='%1.1f%%', startangle=90)
-                ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-
-                # Streamlitに表示
-                st.pyplot(fig)
-
-
+            st.subheader("全体の投資傾向について")
             st.write("################################################################################")
 
-        st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">行動経済学の指摘事項</p>', unsafe_allow_html=True)
-        if "advice" not in st.session_state:
-            st.session_state.advice_df = advice(buy_reason_ratios, st.session_state.buy_log, st.session_state.sell_log)
-            st.session_state.advice = True
+            # st.write("投資傾向分類結果を書く")
+            # st.write(f"運用成績：{benef}")
 
-        if st.session_state.advice_df.empty:
-            st.write("特になし")
+            st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">投資行動型</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="font-family:fantasy; color:blue; font-size: 24px;">{action_type}</p>', unsafe_allow_html=True)
+            st.write("特徴：")
+            st.write(feature)
+            st.write("欠点：")
+            st.write(weekness)
+            st.write("アドバイス：")
+            st.write(advice_text)
+
+            # checkの初期値を設定
+            st.session_state.check = False
+
+            check = st.checkbox("詳細な内容を表示", value = st.session_state.check)
+            if check:
+                st.write("################################################################################")
+                st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">個人の性格</p>', unsafe_allow_html=True)
+                st.write(st.session_state.personal)
+
+                st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">取引量</p>', unsafe_allow_html=True)
+                #各統計量表示
+                st.dataframe(trade_value)
+                # ヒストグラムを作成
+                fig, ax = plt.subplots()
+                ax.hist(bdf2['取引量'][0], bins=10, color='blue', alpha=0.7, edgecolor='black')
+                ax.legend(loc="upper left")
+                plt.title('取引量のヒストグラム')
+                ax.set_xlabel('１取引あたりの購入金額')
+                ax.set_ylabel('count')
+                plt.tight_layout()
+                # Streamlitでヒストグラムを表示
+                st.pyplot(fig)
+
+                st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">運用成績</p>', unsafe_allow_html=True)
+                #各統計量表示
+                st.dataframe(wield_grades)
+                # ヒストグラムを作成
+                fig, ax = plt.subplots()
+                ax.hist(bdf['運用成績'][0], bins=10, color='blue', alpha=0.7, edgecolor='black')
+                ax.legend(loc="upper left")
+                plt.title('利益のヒストグラム')
+                ax.set_xlabel('利益')
+                ax.set_ylabel('count')
+                plt.tight_layout()
+                # Streamlitでヒストグラムを表示
+                st.pyplot(fig)
+
+                st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">購入根拠</p>', unsafe_allow_html=True)
+                # 統計量を表示
+                col_b1, col_b2 = st.columns((4, 6))
+                with col_b1:
+                    st.write("\n各カテゴリのカウント:")
+                    st.write(buy_reason_count)
+
+                    st.write("\n各カテゴリの割合:")
+                    st.write(buy_reason_ratios)
+
+                with col_b2:
+                    # 円グラフを作成
+                    fig, ax = plt.subplots()
+                    ax.pie(buy_reason_ratios, labels=buy_reason_ratios.index, autopct='%1.1f%%', startangle=90)
+                    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+
+                    # Streamlitに表示
+                    st.pyplot(fig)
+
+                st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">売却根拠</p>', unsafe_allow_html=True)
+                # 統計量を表示
+                col_s1, col_s2 = st.columns((4, 6))
+                with col_s1:
+                    st.write("\n各カテゴリのカウント:")
+                    st.write(sell_reason_count)
+
+                    st.write("\n各カテゴリの割合:")
+                    st.write(sell_reason_ratios)
+                    
+                with col_s2:
+                    # 円グラフを作成
+                    fig, ax = plt.subplots()
+                    ax.pie(sell_reason_ratios, labels=sell_reason_ratios.index, autopct='%1.1f%%', startangle=90)
+                    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+
+                    # Streamlitに表示
+                    st.pyplot(fig)
+
+
+                st.write("################################################################################")
+
+            st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">行動経済学の指摘事項</p>', unsafe_allow_html=True)
+            if "advice" not in st.session_state:
+                st.session_state.advice_df = advice(buy_reason_ratios, st.session_state.buy_log, st.session_state.sell_log)
+                st.session_state.advice = True
+
+            if st.session_state.advice_df.empty:
+                st.write("特になし")
+            else:
+                for i in range(0, len(st.session_state.advice_df)):
+                    st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.advice_df["指摘事項"][i]}</p>', unsafe_allow_html=True)
+
+                    target_BE = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.advice_df['指摘事項'][i]]
+                    target_BE = target_BE.reset_index(drop=True)
+                    st.write(target_BE['内容'][0])
+                    # st.write("アドバイス")
+                    st.write(f"　→ {target_BE['アドバイス'][0]}")
+
+            st.write("################################################################################")
+
+            st.subheader("各取引について")
+            st.write("################################################################################")
+
+            # st.write("各種投資行動の説明を書く")
+
+            if "some_trade_advice" not in st.session_state:
+                st.session_state.trade_advice_df = some_trade_advice(st.session_state.buy_log, st.session_state.sell_log)  
+                st.session_state.some_trade_advice = True
+
+            if len(st.session_state.trade_advice_df) == 0:
+                st.write("アドバイスすることはありません")
+            else:
+                #trade_advice_dfからグラフを作成する
+                for i in range(0,len(st.session_state.trade_advice_df)):
+                    tgt_name = st.session_state.trade_advice_df.iloc[i]['企業名']
+                    tgt_sell_day = st.session_state.sell_log[st.session_state.sell_log['企業名']==tgt_name]['年月'].iloc[-1]
+
+                    tgt_buy_day = st.session_state.buy_log[st.session_state.buy_log['企業名']==tgt_name]['年月'].iloc[-1]
+
+                    tgt_buy_day = dt.datetime.strptime(tgt_buy_day, "%Y/%m/%d")
+                    tgt_sell_day = dt.datetime.strptime(tgt_sell_day, "%Y/%m/%d")
+
+                    tgt_buy_day_temp = tgt_buy_day + dt.timedelta(days=-30)
+                    tgt_sell_day_temp = tgt_sell_day + dt.timedelta(days=30)
+
+                    index = st.session_state.c_master.loc[(st.session_state.c_master['企業名']==tgt_name)].index.values[0]
+                    #companiesからデータを抽出する
+                    target_company = st.session_state.loaded_companies[index]
+                    name = target_company.name
+                    rdf = target_company.rdf_all[tgt_buy_day_temp:tgt_sell_day_temp]
+
+
+                    st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.trade_advice_df.iloc[i]["指摘事項"]}</p>', unsafe_allow_html=True)
+                    target_BE2 = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.trade_advice_df.iloc[i]['指摘事項']]
+                    target_BE2 = target_BE2.reset_index(drop=True)
+                    st.write(target_BE2['内容'][0])
+
+                    if st.session_state.trade_advice_df.iloc[i]['指摘事項'] == '現在志向バイアス':
+                        rdf_temp = rdf[tgt_sell_day:tgt_sell_day_temp]
+                        max_date = rdf_temp[rdf_temp['Close']==rdf_temp['Close'].max()].index.values[0]
+                        make_graph(name, rdf, buy_date=tgt_buy_day, sell_date=tgt_sell_day, now_kk_bool=True, max_date=max_date)
+                    else:
+                        make_graph(name, rdf, buy_date=tgt_buy_day, sell_date=tgt_sell_day, now_kk_bool=True)
+
+                    tgt_benef = st.session_state.sell_log[st.session_state.sell_log['企業名']==tgt_name]['利益'].iloc[-1]
+
+                    if tgt_benef < 0:
+                        colored_text = f"利益：　<span style='font-size:20px'><span style='color:green'> {round(tgt_benef,1)}円</span> </span>"
+                        st.markdown(colored_text, unsafe_allow_html=True)
+                    else:
+                        colored_text = f"利益：　<span style='font-size:20px'><span style='color:red'> +{round(tgt_benef,1)}円</span> </span>"
+                        st.markdown(colored_text, unsafe_allow_html=True)
+
+                    # st.write("アドバイス")
+                    st.write(target_BE2['アドバイス'][0])
+
+            st.write("################################################################################")
+
+            #現在時刻情報を取得
+            dt_now = dt.datetime.now()
+            dt_now_str = dt_now.strftime('%Y/%m/%d')
+
+            Dividends_df_temp = st.session_state.Dividends_df.copy()
+            for i in range(0, len(Dividends_df_temp)):
+                Dividends_df_temp['配当基準日'].iloc[i] = Dividends_df_temp['配当基準日'].iloc[i].strftime('%Y/%m/%d')
+
+            # ユーザからの情報をデータフレームとして受け取る
+            Simulation_Result = {
+                "実施日": [dt_now_str], 
+                "行動型": [action_type],
+                "レベル": [st.session_state.level_id],  
+                "運用成績": [benef],
+                "buy_log": [st.session_state.buy_log],
+                "sell_log": [st.session_state.sell_log],
+                "Dividends": [Dividends_df_temp],
+                "アドバイス": [st.session_state.advice_df],
+                "各取引に関するアドバイス": [st.session_state.trade_advice_df]
+            }
+            Simulation_Results_df = pd.DataFrame(Simulation_Result)
+
+            #実績画面にデータを保存する
+            Simulation_Results_instance = Simulation_Results(dates=dt_now_str, action_type=action_type, LEVEL=st.session_state.level_id, investment_result=benef, buy_log=st.session_state.buy_log, sell_log=st.session_state.sell_log, Dividends=st.session_state.Dividends_df, advice=st.session_state.advice_df, trade_advice=st.session_state.trade_advice_df)
+
+            if "result_bool" not in st.session_state:
+                st.session_state.result.append(Simulation_Results_instance)
+                #データベースに保存する
+                insert_data_to_db(st.session_state.personal_df, Simulation_Results_df)
+                st.session_state.result_bool = True
+
+
+            # st.button("スタート画面に戻る",on_click=end_sym())
         else:
-            for i in range(0, len(st.session_state.advice_df)):
-                st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.advice_df["指摘事項"][i]}</p>', unsafe_allow_html=True)
-
-                target_BE = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.advice_df['指摘事項'][i]]
-                target_BE = target_BE.reset_index(drop=True)
-                st.write(target_BE['内容'][0])
-                # st.write("アドバイス")
-                st.write(f"　→ {target_BE['アドバイス'][0]}")
-
-        st.write("################################################################################")
-
-        st.subheader("各取引について")
-        st.write("################################################################################")
-
-        # st.write("各種投資行動の説明を書く")
-
-        if "some_trade_advice" not in st.session_state:
-            st.session_state.trade_advice_df = some_trade_advice(st.session_state.buy_log, st.session_state.sell_log)  
-            st.session_state.some_trade_advice = True
-
-        #trade_advice_dfからグラフを作成する
-        for i in range(0,len(st.session_state.trade_advice_df)):
-            tgt_name = st.session_state.trade_advice_df.iloc[i]['企業名']
-            tgt_sell_day = st.session_state.sell_log[st.session_state.sell_log['企業名']==tgt_name]['年月'].iloc[-1]
-
-            tgt_buy_day = st.session_state.buy_log[st.session_state.buy_log['企業名']==tgt_name]['年月'].iloc[-1]
-
-            tgt_buy_day_temp = tgt_buy_day + dt.timedelta(days=-30)
-            tgt_sell_day_temp = tgt_sell_day + dt.timedelta(days=30)
-
-            index = st.session_state.c_master.loc[(st.session_state.c_master['企業名']==tgt_name)].index.values[0]
-            #companiesからデータを抽出する
-            target_company = st.session_state.loaded_companies[index]
-            name = target_company.name
-            rdf = target_company.rdf_all[tgt_buy_day_temp:tgt_sell_day_temp]
-
-
-            st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.trade_advice_df.iloc[i]["指摘事項"]}</p>', unsafe_allow_html=True)
-            target_BE2 = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.trade_advice_df.iloc[i]['指摘事項']]
-            target_BE2 = target_BE2.reset_index(drop=True)
-            st.write(target_BE2['内容'][0])
-
-            if st.session_state.trade_advice_df.iloc[i]['指摘事項'] == '現在志向バイアス':
-                rdf_temp = rdf[tgt_sell_day:tgt_sell_day_temp]
-                max_date = rdf_temp[rdf_temp['Close']==rdf_temp['Close'].max()].index.values[0]
-                make_graph(name, rdf, buy_date=tgt_buy_day, sell_date=tgt_sell_day, now_kk_bool=True, max_date=max_date)
-            else:
-                make_graph(name, rdf, buy_date=tgt_buy_day, sell_date=tgt_sell_day, now_kk_bool=True)
-
-            tgt_benef = st.session_state.sell_log[st.session_state.sell_log['企業名']==tgt_name]['利益'].iloc[-1]
-
-            if tgt_benef < 0:
-                colored_text = f"利益：　<span style='font-size:20px'><span style='color:green'> {round(tgt_benef,1)}円</span> </span>"
-                st.markdown(colored_text, unsafe_allow_html=True)
-            else:
-                colored_text = f"利益：　<span style='font-size:20px'><span style='color:red'> +{round(tgt_benef,1)}円</span> </span>"
-                st.markdown(colored_text, unsafe_allow_html=True)
-
-            # st.write("アドバイス")
-            st.write(target_BE2['アドバイス'][0])
-
-
-        st.write("################################################################################")
-
-        #現在時刻情報を取得
-        dt_now = dt.datetime.now()
-
-        #実績画面にデータを保存する
-        Simulation_Results_instance = Simulation_Results(dates=dt_now, action_type=action_type, LEVEL=st.session_state.level_id, investment_result=benef, buy_log=st.session_state.buy_log, sell_log=st.session_state.sell_log, advice=st.session_state.advice_df, trade_advice=st.session_state.trade_advice_df)
-
-        if "result_bool" not in st.session_state:
-            st.session_state.result.append(Simulation_Results_instance)
-            st.session_state.result_bool = True
-
-        # st.button("スタート画面に戻る",on_click=end_sym())
+            st.write("株の取引が行われていないため結果を表示できません")
 
         if st.button("スタート画面に戻る"):
             st.session_state.show_page = False
-
 
     # 購入画面
     def page6():
@@ -1500,9 +1586,11 @@ if st.session_state.show_page:
             st.session_state.Rationale_for_purchase = "指定なし"
 
         buy_reason_arrow = [
-            "業績が安定している",
-            "利回りがいい",
             "チャート形状",
+            "業績が安定している",
+            "財務データ",
+            "利回りがいい",
+            "配当目当て",
             "リスクが小さい",
             "直感",
             "過去の経験から",
@@ -1517,8 +1605,6 @@ if st.session_state.show_page:
         st.session_state.Rationale_for_purchase = st.radio("購入根拠", buy_reason_arrow)
 
         st.button("購入する",on_click=lambda: buy(name, rdf_all))
-
-        st.session_state.show_page = True
 
             
     # 売却画面
@@ -1535,7 +1621,6 @@ if st.session_state.show_page:
 
         sell_reason_arrow = [
             "チャート形状",
-            "財務データ",
             "直感",
             "過去の経験から",
             "全体的な景気",
@@ -1549,8 +1634,6 @@ if st.session_state.show_page:
 
         st.button("売却する",on_click=lambda: sell(name, rdf_all))
 
-        st.session_state.show_page = True
-
 
     # ログ画面
     def page8():
@@ -1562,9 +1645,10 @@ if st.session_state.show_page:
         with col_sell:
             st.dataframe(st.session_state.sell_log)
 
-        st.button("選択可能銘柄一覧へ戻る",on_click=lambda: change_page(1))
+        st.subheader("配当に関するデータ")
+        st.dataframe(st.session_state.Dividends_df)
 
-        st.session_state.show_page = True
+        st.button("選択可能銘柄一覧へ戻る",on_click=lambda: change_page(1))
 
     # 日経平均
     def page9():
@@ -1621,8 +1705,6 @@ if st.session_state.show_page:
     if st.session_state.page_id == "page10":
         page10() 
 
-    # st.sidebar.write("_______________________________________________________________________________________________________")
-
     st.sidebar.button("一日進める", key='uniq_key_1',on_click=lambda: add_next_day(1))
     st.sidebar.button("一週間進める", key='uniq_key_2', on_click=lambda: add_next_day(7))
     st.sidebar.write(f"now = {st.session_state.now}")
@@ -1644,8 +1726,6 @@ if st.session_state.show_page:
     # st.sidebar.button('シミュレーションを終了する',key='uniq_key_5', on_click=end_sym()):
     if st.sidebar.button('シミュレーションを終了する'):
         st.session_state.show_page = False
-
-    # st.session_state.show_page = True
 
         
 #_____________________________________________________________スタート画面_________________________________________________________________________________________________________________________________
@@ -1698,16 +1778,11 @@ else:
 
         st.button('シミュレーションを続きから始める',on_click=lambda: start_sym(2))
 
-
     # 実績
     def page2_2():
         st.title("実績")
-        if "Achievements" not in st.session_state:
-            st.session_state.Achievements = []
 
         st.write("########################################################################################")
-
-        # st.write("ここにこれまでの実績を持ってくる")
 
         for i, result in enumerate(st.session_state.result, start=1):
             st.subheader(f"第{i}回")
@@ -1721,6 +1796,9 @@ else:
 
         if "some_trade_advice_temp" in st.session_state:
             del st.session_state.some_trade_advice_temp
+
+        # データベースの中身を確認する
+        # check_db()
             
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
 
@@ -1746,8 +1824,6 @@ else:
 
         st.write("########################################")
 
-        if "account_created" not in st.session_state:
-            st.session_state.account_created = False
 
         if not st.session_state.account_created:
             if st.button("アカウントを作成する"):
@@ -1789,12 +1865,7 @@ else:
             st.button("スタート画面に戻る",on_click=lambda: create_acount())
 
         else:
-            st.button("スタート画面に戻る",on_click=lambda: change_page(1))
-
-        # if st.button("スタート画面に戻る"):
-        #     st.session_state.personal_df = st.session_state.personal_df.append(new_data, ignore_index=True)
-        #     change_page2(1)
-            
+            st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
 
    # 投資について 
     def page2_4():
@@ -1897,8 +1968,8 @@ else:
             # ヒストグラムを作成
             fig, ax = plt.subplots()
             ax.hist(bdf2['取引量'][0], bins=10, color='blue', alpha=0.7, edgecolor='black')
-            ax.set_title('trade value histglam')
-            ax.set_xlabel('buy amount of one trade')
+            ax.set_title('取引量のヒストグラム')
+            ax.set_xlabel('１取引あたりの購入金額')
             ax.set_ylabel('count')
             # Streamlitでヒストグラムを表示
             st.pyplot(fig)
@@ -1909,8 +1980,8 @@ else:
             # ヒストグラムを作成
             fig, ax = plt.subplots()
             ax.hist(bdf['運用成績'][0], bins=10, color='blue', alpha=0.7, edgecolor='black')
-            ax.set_title('benefit histglam')
-            ax.set_xlabel('benefit')
+            ax.set_title('利益のヒストグラム')
+            ax.set_xlabel('利益')
             ax.set_ylabel('count')
             # Streamlitでヒストグラムを表示
             st.pyplot(fig)
@@ -2031,22 +2102,6 @@ else:
         st.write("################################################################################")
 
         st.button("戻る", key='uniq_key_6',on_click=lambda: change_page2(2))
-
-
-    # pages2 = dict(
-    #     page2_1="スタート画面",
-    #     page2_2="実績",
-    #     page2_3="アカウント情報",
-    #     page2_4="投資について",
-    #     page2_5="このシミュレーションについて"
-    # )
-
-    # page_id2 = st.sidebar.selectbox( # st.sidebar.*でサイドバーに表示する
-    #     "ページ名",
-    #     ["page2_1", "page2_2", "page2_3", "page2_4", "page2_5"],
-    #     format_func=lambda page_id2: pages2[page_id2], # 描画する項目を日本語に変換
-    #     key="page-select2"
-    # )
 
     if "page_id2" not in st.session_state:
         st.session_state.page_id2 = "page2_1"
