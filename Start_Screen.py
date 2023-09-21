@@ -2051,7 +2051,7 @@ else:
         st.subheader("各取引について")
         st.write("################################################################################")
 
-        st.write("各種投資行動の説明を書く")
+        # st.write("各種投資行動の説明を書く")
 
         if "some_trade_advice_temp" not in st.session_state:
             st.session_state.trade_advice_df_temp = some_trade_advice(st.session_state.buy_log_temp, st.session_state.sell_log_temp)  
@@ -2064,6 +2064,9 @@ else:
             tgt_sell_day = st.session_state.sell_log_temp[st.session_state.sell_log_temp['企業名']==tgt_name]['年月'].iloc[-1]
 
             tgt_buy_day = st.session_state.buy_log_temp[st.session_state.buy_log_temp['企業名']==tgt_name]['年月'].iloc[-1]
+
+            tgt_buy_day = dt.datetime.strptime(tgt_buy_day, "%Y/%m/%d")
+            tgt_sell_day = dt.datetime.strptime(tgt_sell_day, "%Y/%m/%d")
 
             tgt_buy_day_temp = tgt_buy_day + dt.timedelta(days=-30)
             tgt_sell_day_temp = tgt_sell_day + dt.timedelta(days=30)
