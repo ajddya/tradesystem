@@ -19,7 +19,7 @@ import io
 
 from functools import partial
 
-# import japanize_matplotlib
+import japanize_matplotlib
 
 import matplotlib.pyplot as plt
 from scipy import stats
@@ -27,9 +27,100 @@ from scipy import stats
 import sqlite3
 
 # 日本語フォントの設定
-plt.rcParams['font.family'] = 'Hiragino Maru Gothic Pro'  # または 'Hiragino Kaku Gothic Pro'
-# plt.rcParams['font.family'] = 'IPAexGothic'
+# plt.rcParams['font.family'] = 'Hiragino Maru Gothic Pro'  # または 'Hiragino Kaku Gothic Pro'
+plt.rcParams['font.family'] = 'IPAexGothic'
 
+# データをデータベースに保存する
+def save_userdata():
+    # データベースに接続
+    conn = sqlite3.connect('my_database.db')
+    cursor = conn.cursor()
+
+    # account_created を保存
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS account_status (
+        id INTEGER PRIMARY KEY,
+        account_created BOOLEAN
+    )
+    """)
+    cursor.execute("INSERT INTO account_status (account_created) VALUES (?)", (st.session_state.account_created,))
+
+    # personal を保存
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS personal (
+        id INTEGER PRIMARY KEY,
+        性格 TEXT,
+        値 FLOAT
+    )
+    """)
+    for index, row in st.session_state.personal.iterrows():
+        cursor.execute("INSERT INTO personal (性格, 値) VALUES (?, ?)", (index, row['性格']))
+
+    # personal_df を保存
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS personal_info (
+        id INTEGER PRIMARY KEY,
+        ユーザ名 TEXT,
+        年齢 INTEGER,
+        性別 TEXT,
+        投資経験の有無 TEXT,
+        投資に関する知識の有無 TEXT,
+        開放性 FLOAT,
+        誠実性 FLOAT,
+        外交性 FLOAT,
+        協調性 FLOAT,
+        神経症傾向 FLOAT
+    )
+    """)
+    for _, row in st.session_state.personal_df.iterrows():
+        cursor.execute("""
+        INSERT INTO personal_info (ユーザ名, 年齢, 性別, 投資経験の有無, 投資に関する知識の有無, 開放性, 誠実性, 外交性, 協調性, 神経症傾向)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", row.values)
+
+    # result は単純なリストなので、例として簡単なテーブルを作成して保存します
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS result_data (
+        id INTEGER PRIMARY KEY,
+        value TEXT
+    )
+    """)
+    for value in st.session_state.result:
+        cursor.execute("INSERT INTO result_data (value) VALUES (?)", (value,))
+
+    # データベースの変更をコミット
+    conn.commit()
+
+    # データベース接続のクローズ
+    conn.close()
+
+# データをデータベースから取得する
+def get_userdata():
+    # データベースに接続
+    conn = sqlite3.connect('my_database.db')
+    cursor = conn.cursor()
+
+    # account_created のデータを取得して代入
+    cursor.execute("SELECT account_created FROM account_status ORDER BY id DESC LIMIT 1")
+    st.session_state.account_created = cursor.fetchone()[0]
+
+    # personal のデータを取得して代入
+    cursor.execute("SELECT 性格, 値 FROM personal")
+    rows = cursor.fetchall()
+    st.session_state.personal = pd.DataFrame(rows, columns=['性格', '値'])
+
+    # personal_df のデータを取得して代入
+    cursor.execute("SELECT ユーザ名, 年齢, 性別, 投資経験の有無, 投資に関する知識の有無, 開放性, 誠実性, 外交性, 協調性, 神経症傾向 FROM personal_info")
+    rows = cursor.fetchall()
+    columns = ['ユーザ名', '年齢', '性別', '投資経験の有無', '投資に関する知識の有無', '開放性', '誠実性', '外交性', '協調性', '神経症傾向']
+    st.session_state.personal_df = pd.DataFrame(rows, columns=columns)
+
+    # result のデータを取得して代入
+    cursor.execute("SELECT value FROM result_data")
+    rows = cursor.fetchall()
+    st.session_state.result = [row[0] for row in rows]
+
+    # データベース接続のクローズ
+    conn.close()
 
 
 #企業データを格納するクラス
@@ -87,7 +178,7 @@ now_range = dt.datetime(2021,1,1)
 i_max = 20
 
 #変数の初期値
-def main():
+def init():
     # データ読み込み
     if "c_master" not in st.session_state:
         st.session_state.c_master = pd.read_csv('company_list3.csv')
@@ -105,6 +196,67 @@ def main():
         with open("companies.pkl", "rb") as file:
             st.session_state.loaded_companies = pickle.load(file)
 
+    if "all_range_end" not in st.session_state:
+        st.session_state.all_range_end = dt.datetime(2021,2,1)  
+
+    #買い・売りの仮ログデータのデータフレーム作成
+    if "buy_log_temp" not in st.session_state:
+        st.session_state.buy_log_temp = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '属性'])
+
+    if "sell_log_temp" not in st.session_state:
+        st.session_state.sell_log_temp = pd.DataFrame(columns=['企業名', '年月', '売却根拠', '売却株式数', '利益', '属性'])
+
+    if "benef_temp" not in st.session_state:
+        st.session_state.benef_temp = 0
+    
+    if "sales_df" not in st.session_state:
+        st.session_state.sales_df = pd.DataFrame(columns=['売上','営業利益','当期利益','基本的1株当たりの当期利益'],index=['2018','2019','2020','2021'])
+
+    if "CF_df" not in st.session_state:
+        st.session_state.CF_df = pd.DataFrame(columns=['営業CF','投資CF','財務CF'],index=['2020','2021'])
+
+    if "FS_df" not in st.session_state:
+        st.session_state.FS_df = pd.DataFrame(columns=['2020','2021'],index=['1株当たりの当期純利益','PER','1株当たりの純資産','PBR','ROA','ROE','自己資本比率'])
+
+    if "div_df" not in st.session_state:
+        st.session_state.div_df = pd.DataFrame(columns=['2020','2021'],index=['配当性向', '配当利回り'])
+
+    if "div_df2" not in st.session_state:
+        st.session_state.div_df2 = pd.DataFrame(columns=['中間','期末'],index=['金額', '配当権利付き最終日', "配当基準日"])
+
+    if "trade_advice_df_temp" not in st.session_state:
+        st.session_state.trade_advice_df_temp = pd.DataFrame(columns=['企業名', '指摘事項'])
+
+    if "advice_df_temp" not in st.session_state:
+        st.session_state.advice_df_temp = pd.DataFrame(columns=['指摘事項'])  
+
+if "init_executed" not in st.session_state:
+    init()  # main関数を実行
+    st.session_state.init_executed = True
+
+load_data = []
+
+# データベースから情報を取得する（ないなら初期値を挿入する）
+if load_data:
+    st.write("データベースからデータを読み取りました")
+    # st.session_state.account_created = 
+    # st.session_state.personal = 
+    # st.session_state.now = 
+    # st.session_state.chose_companies = 
+    # st.session_state.chose_companies_name_list = 
+    # st.session_state.possess_money = 
+    # st.session_state.possess_KK_df = 
+    # st.session_state.buy_log = 
+    # st.session_state.sell_log = 
+    # st.session_state.Dividends_df = 
+    # st.session_state.trade_advice_df = 
+    # st.session_state.advice_df = 
+    # st.session_state.personal_df = 
+    # st.session_state.result = 
+    # st.session_state.create_chose_companies_executed = 
+    # st.session_state.selected_company = 
+else:
+    # 各変数の初期化
     if "account_created" not in st.session_state:
         st.session_state.account_created = False
 
@@ -113,9 +265,6 @@ def main():
 
     if "now" not in st.session_state:
         st.session_state.now = dt.datetime(2021,1,4)
-
-    if "all_range_end" not in st.session_state:
-        st.session_state.all_range_end = dt.datetime(2021,2,1)  
 
     #乱数から企業名をリストに格納する
     if "chose_companies" not in st.session_state:
@@ -138,45 +287,14 @@ def main():
     if "sell_log" not in st.session_state:
         st.session_state.sell_log = pd.DataFrame(columns=['企業名', '年月', '売却根拠', '売却株式数', '利益', '属性'])
 
-    #買い・売りの仮ログデータのデータフレーム作成
-    if "buy_log_temp" not in st.session_state:
-        st.session_state.buy_log_temp = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '属性'])
-
-    if "sell_log_temp" not in st.session_state:
-        st.session_state.sell_log_temp = pd.DataFrame(columns=['企業名', '年月', '売却根拠', '売却株式数', '利益', '属性'])
-
     if "Dividends_df" not in st.session_state:
         st.session_state.Dividends_df = pd.DataFrame(columns=['企業名', '属性', '配当金', "配当基準日", "実施"])
-
-    if "benef_temp" not in st.session_state:
-        st.session_state.benef_temp = 0
-
-    if "sales_df" not in st.session_state:
-        st.session_state.sales_df = pd.DataFrame(columns=['売上','営業利益','当期利益','基本的1株当たりの当期利益'],index=['2018','2019','2020','2021'])
-
-    if "CF_df" not in st.session_state:
-        st.session_state.CF_df = pd.DataFrame(columns=['営業CF','投資CF','財務CF'],index=['2020','2021'])
-
-    if "FS_df" not in st.session_state:
-        st.session_state.FS_df = pd.DataFrame(columns=['2020','2021'],index=['1株当たりの当期純利益','PER','1株当たりの純資産','PBR','ROA','ROE','自己資本比率'])
-
-    if "div_df" not in st.session_state:
-        st.session_state.div_df = pd.DataFrame(columns=['2020','2021'],index=['配当性向', '配当利回り'])
-
-    if "div_df2" not in st.session_state:
-        st.session_state.div_df2 = pd.DataFrame(columns=['中間','期末'],index=['金額', '配当権利付き最終日', "配当基準日"])
 
     if "trade_advice_df" not in st.session_state:
         st.session_state.trade_advice_df = pd.DataFrame(columns=['企業名', '指摘事項'])
 
     if "advice_df" not in st.session_state:
         st.session_state.advice_df = pd.DataFrame(columns=['指摘事項'])  
-
-    if "trade_advice_df_temp" not in st.session_state:
-        st.session_state.trade_advice_df_temp = pd.DataFrame(columns=['企業名', '指摘事項'])
-
-    if "advice_df_temp" not in st.session_state:
-        st.session_state.advice_df_temp = pd.DataFrame(columns=['指摘事項'])  
 
     # 個人情報のデータ
     if "personal_df" not in st.session_state:
@@ -185,9 +303,15 @@ def main():
     if "result" not in st.session_state:
         st.session_state.result = [] 
 
-if "main_executed" not in st.session_state:
-    main()  # main関数を実行
-    st.session_state.main_executed = True
+    # #create_chose_companiesの状態を保持
+    # if "create_chose_companies_executed" not in st.session_state: 
+    #     create_chose_companies()
+    #     st.session_state.create_chose_companies_executed = True
+
+    # if "selected_company" not in st.session_state:
+    #     st.session_state.selected_company = st.session_state.chose_companies_name_list[0]
+
+
 
 #_______________________________________________________________________________
 
@@ -447,9 +571,10 @@ def sell(name, rdf_all):
 # 取引量、利益の基本統計量を作成
 def display_distribution(data):
     # 日本語フォントの設定
-    font_path = "/Users/tatematsukenichirou/Desktop/my_page/卒研/研究（株価）/デモトレード/program/ipaexg00401/ipaexg.ttf"
-    plt.rcParams['font.family'] = 'sans-serif'
-    plt.rcParams['font.sans-serif'] = [font_path]
+    # font_path = "/Users/tatematsukenichirou/Desktop/my_page/卒研/研究（株価）/デモトレード/program/ipaexg00401/ipaexg.ttf"
+    # plt.rcParams['font.family'] = 'sans-serif'
+    # plt.rcParams['font.sans-serif'] = [font_path]
+    plt.rcParams['font.family'] = 'IPAexGothic'
 
     # データがスカラーの場合、リストに変換
     if np.isscalar(data):
@@ -588,10 +713,10 @@ def some_trade_advice(buy_log, sell_log):
                     count = 0
             return max_count
 
-        # 連続してbuy_day_KKよりも小さい値が7日以上続く場所を見つける
+        # 連続してbuy_day_KKよりも小さい値が30日以上続く場所を見つける
         if count_true_consecutive(in_trade_rdf['Below_Buy_Day_KK']) >= 30:
-            # この条件を満たす場合にDataFrameに追加する処理をここに書く
-            minas_seqence_df = pd.concat([minas_seqence_df, minas_benef_df.iloc[i]], ignore_index = True)
+            minas_seqence_df_temp = pd.DataFrame(minas_benef_df.iloc[i]).transpose()
+            minas_seqence_df = pd.concat([minas_seqence_df, minas_seqence_df_temp], ignore_index = True)
 
     if minas_seqence_df.empty == False:
         # print('ブレークイーブン効果')
@@ -674,8 +799,9 @@ def advice(buy_reason_ratios, buy_log, sell_log):
         trade_time_df = pd.DataFrame()
         for i in range(0,len(sell_log)):
             c_name = sell_log.iloc[i]['企業名']
-            buy_time = buy_log[buy_log['企業名']==c_name]['年月']
-            sell_time = sell_log[sell_log['企業名']==c_name]['年月']
+            buy_time = buy_log_temp[buy_log_temp['企業名']==c_name]['年月']
+            sell_time = sell_log[sell_log['企業名']==c_name]['年月'].iloc[0]
+            sell_time = dt.datetime.strptime(sell_time, "%Y/%m/%d")
 
             delta_time = sell_time - buy_time
 
@@ -887,9 +1013,6 @@ def check_db():
 # システム管理_______________________________________________________________________________________________________________________________________________________________________
 
 def reset():
-    if "main_executed" in st.session_state:
-        del st.session_state.main_executed
-
     if "create_chose_companies_executed" in st.session_state:
         del st.session_state.create_chose_companies_executed
     
@@ -973,13 +1096,15 @@ def change_page_to_result(buy_log, sell_log, possess_money):
     st.session_state.show_page = True
     st.session_state.page_id = "page5"
 
-def change_page2(num, buy_log=None, sell_log=None, benef=None):
+def change_page2(num, buy_log=None, sell_log=None, benef=None, advice_df=None):
     if buy_log is not None and not buy_log.empty:
         st.session_state.buy_log_temp = buy_log
     if sell_log is not None and not sell_log.empty:
         st.session_state.sell_log_temp = sell_log
     if benef:
         st.session_state.benef_temp = benef
+    if advice_df is not None and not advice_df.empty:
+        st.session_state.advice_df_temp = advice_df
 
     st.session_state.page_id2 = f"page2_{num}"
 #_____________________________________________________________________________________________________________________________
@@ -1787,18 +1912,15 @@ else:
         for i, result in enumerate(st.session_state.result, start=1):
             st.subheader(f"第{i}回")
             result.display()
-            st.button("結果を見る", key=f"result_{i}", on_click=partial(change_page2, 6, result.buy_log, result.sell_log, result.investment_result))
+            st.button("結果を見る", key=f"result_{i}", on_click=partial(change_page2, 6, result.buy_log, result.sell_log, result.investment_result, result.advice))
 
             st.write("########################################################################################")
 
-        if "advice_temp" in st.session_state:
-            del st.session_state.advice_temp
+        # if "advice_temp" in st.session_state:
+        #     del st.session_state.advice_temp
 
         if "some_trade_advice_temp" in st.session_state:
             del st.session_state.some_trade_advice_temp
-
-        # データベースの中身を確認する
-        # check_db()
             
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
 
@@ -1877,6 +1999,8 @@ else:
 
         # st.write("########################################")
 
+        # データベースの中身を確認する
+        check_db()
 
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
 
@@ -2028,9 +2152,9 @@ else:
             st.write("################################################################################")
 
         st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">行動経済学の指摘事項</p>', unsafe_allow_html=True)
-        if "advice_temp" not in st.session_state:
-            st.session_state.advice_df_temp = advice(buy_reason_ratios, st.session_state.buy_log_temp, st.session_state.sell_log_temp)
-            st.session_state.advice_temp = True
+        # if "advice_temp" not in st.session_state:
+        #     st.session_state.advice_df_temp = advice(buy_reason_ratios, st.session_state.buy_log_temp, st.session_state.sell_log_temp)
+        #     st.session_state.advice_temp = True
 
         if st.session_state.advice_df_temp.empty:
             st.write("特になし")
