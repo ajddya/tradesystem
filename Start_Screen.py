@@ -80,8 +80,25 @@ def save_userdata():
     """)
 
     row = st.session_state.personal_df.iloc[0]
-    serialized_data = pickle.dumps(st.session_state.result)
-    cursor.execute("INSERT OR REPLACE INTO simulation_results (メールアドレス, data) VALUES (?, ?)", (row["メールアドレス"], serialized_data))
+    current_result = st.session_state.result
+
+    # データベースから前回のデータを取得
+    cursor.execute("SELECT data FROM simulation_results WHERE メールアドレス=?", (row["メールアドレス"],))
+    pre_data = cursor.fetchone()
+
+    change_data_bool = False
+    if pre_data:  # 前回のデータが存在する場合
+        previous_result = pickle.loads(pre_data[0])
+        if previous_result != current_result:
+            change_data_bool = True
+    else:  # 前回のデータが存在しない場合
+        change_data_bool = True
+
+
+    # st.session_state.resultが変更されている場合のみデータベースを更新
+    if change_data_bool:
+        serialized_data = pickle.dumps(st.session_state.result)
+        cursor.execute("INSERT OR REPLACE INTO simulation_results (メールアドレス, data) VALUES (?, ?)", (row["メールアドレス"], serialized_data))
 
     # データベースの変更をコミット
     conn.commit()
@@ -902,7 +919,7 @@ def insert_data_to_db(private_data, result_data):
     c = conn.cursor()
 
     # テーブルの削除
-    c.execute("drop table user_data")
+    # c.execute("drop table user_data")
 
     # テーブルの作成（初回のみ）
     c.execute('CREATE TABLE IF NOT EXISTS user_data(result_data)')
@@ -932,13 +949,9 @@ def check_db():
 
         for row in c:
             serialized_data = row[0]
-            # serialized_data_1 = row[1]
 
             deserialized_data = pd.read_json(serialized_data)
             st.write(deserialized_data)
-
-            # deserialized_data_1 = pd.read_json(serialized_data_1)
-            # st.write(deserialized_data_1)
 
         # カーソルをクローズ（オプション）
         c.close()
