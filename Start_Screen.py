@@ -509,9 +509,6 @@ def sell(name, rdf_all):
 # 取引量、利益の基本統計量を作成
 def display_distribution(data):
     # 日本語フォントの設定
-    # font_path = "/Users/tatematsukenichirou/Desktop/my_page/卒研/研究（株価）/デモトレード/program/ipaexg00401/ipaexg.ttf"
-    # plt.rcParams['font.family'] = 'sans-serif'
-    # plt.rcParams['font.sans-serif'] = [font_path]
     plt.rcParams['font.family'] = 'IPAexGothic'
 
     # データがスカラーの場合、リストに変換
