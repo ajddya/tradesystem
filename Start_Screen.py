@@ -37,7 +37,7 @@ plt.rcParams['font.family'] = 'IPAexGothic'
 # データをデータベースに保存する
 def save_userdata():
     # データベースに接続
-    conn = sqlite3.connect('my_database.db')
+    conn = sqlite3.connect('db/my_database.db')
     cursor = conn.cursor()
 
     # テーブルを削除
@@ -124,6 +124,9 @@ def save_userdata():
     # VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (row["ユーザ名"], st.session_state.now, st.session_state.chose_companies, st.session_state.chose_companies_name_list, st.session_state.possess_money, st.session_state.possess_KK_df, st.session_state.buy_log, st.session_state.sell_log, st.session_state.Dividends_df, st.session_state.trade_advice_df, st.session_state.advice_df, st.session_state.create_chose_companies_executed, st.session_state.selected_company))
     
 
+    # cursor.execute("drop table personal_info")
+    # cursor.execute("drop table simulation_results")
+
     # データベースの変更をコミット
     conn.commit()
 
@@ -143,19 +146,19 @@ i_max = 20
 def init():
     # データ読み込み
     if "c_master" not in st.session_state:
-        st.session_state.c_master = pd.read_csv('company_list3.csv')
+        st.session_state.c_master = pd.read_csv('read_file/company_list3.csv')
 
     if "categorize" not in st.session_state:
-        st.session_state.categorize = pd.read_csv('categorize.csv')
+        st.session_state.categorize = pd.read_csv('read_file/categorize.csv')
 
     if "action_type_advice" not in st.session_state:
-        st.session_state.action_type_advice = pd.read_csv('action_type_advice.csv')
+        st.session_state.action_type_advice = pd.read_csv('read_file/action_type_advice.csv')
 
     if "Behavioral_Economics" not in st.session_state:
-        st.session_state.Behavioral_Economics = pd.read_csv('Behavioral_Economics.csv')
+        st.session_state.Behavioral_Economics = pd.read_csv('read_file/Behavioral_Economics.csv')
 
     if "loaded_companies" not in st.session_state:
-        with open("companies.pkl", "rb") as file:
+        with open("read_file/companies.pkl", "rb") as file:
             st.session_state.loaded_companies = pickle.load(file)
 
     if "all_range_end" not in st.session_state:
@@ -251,9 +254,6 @@ def changeable_init():
 
     if "result" not in st.session_state:
         st.session_state.result = [] 
-
-    if "result_df" not in st.session_state:
-        st.session_state.result_df = pd.DataFrame() 
 
     # #create_chose_companiesの状態を保持
     # if "create_chose_companies_executed" not in st.session_state: 
@@ -939,11 +939,11 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
 # データの挿入
 def insert_data_to_db(private_data, result_data):
     # データベースに接続
-    conn = sqlite3.connect('Trade_Simulate.db')
+    conn = sqlite3.connect('db/Trade_Simulate.db')
     c = conn.cursor()
 
     # テーブルの削除
-    c.execute("drop table user_data")
+    # c.execute("drop table user_data")
 
     # テーブルの作成（初回のみ）
     c.execute('CREATE TABLE IF NOT EXISTS user_data(result_data)')
@@ -953,6 +953,9 @@ def insert_data_to_db(private_data, result_data):
     result_data_serialized = result_data.to_json()
 
     c.execute('INSERT INTO user_data (result_data) VALUES (?)', (result_data_serialized,))
+
+    # テーブルの削除
+    # c.execute("drop table user_data")
 
     conn.commit()
 
@@ -965,7 +968,7 @@ def insert_data_to_db(private_data, result_data):
 # データの確認
 def check_db():
         # データベースに接続
-        conn = sqlite3.connect('Trade_Simulate.db')
+        conn = sqlite3.connect('db/Trade_Simulate.db')
         c = conn.cursor()
 
         c.execute('SELECT * FROM user_data ')
@@ -1458,8 +1461,8 @@ if st.session_state.show_page:
             weekness = target_action_type["欠点"][0]
             advice_text = target_action_type["アドバイス"][0]
 
+            st.write("_______________________________________________________________________________________________________")
             st.subheader("全体の投資傾向について")
-            st.write("################################################################################")
 
             # st.write("投資傾向分類結果を書く")
             # st.write(f"運用成績：{benef}")
@@ -1476,9 +1479,9 @@ if st.session_state.show_page:
             # checkの初期値を設定
             st.session_state.check = False
 
+            st.write("################################################################################")
             check = st.checkbox("詳細な内容を表示", value = st.session_state.check)
             if check:
-                st.write("################################################################################")
                 st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">個人の性格</p>', unsafe_allow_html=True)
                 st.write(st.session_state.personal)
 
@@ -1549,7 +1552,7 @@ if st.session_state.show_page:
                     st.pyplot(fig)
 
 
-                st.write("################################################################################")
+            st.write("################################################################################")
 
             st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">行動経済学の指摘事項</p>', unsafe_allow_html=True)
             if "advice" not in st.session_state:
@@ -1568,10 +1571,9 @@ if st.session_state.show_page:
                     # st.write("アドバイス")
                     st.write(f"　→ {target_BE['アドバイス'][0]}")
 
-            st.write("################################################################################")
 
+            st.write("_______________________________________________________________________________________________________")
             st.subheader("各取引について")
-            st.write("################################################################################")
 
             # st.write("各種投資行動の説明を書く")
 
@@ -1626,7 +1628,7 @@ if st.session_state.show_page:
                     # st.write("アドバイス")
                     st.write(target_BE2['アドバイス'][0])
 
-            st.write("################################################################################")
+            st.write("_______________________________________________________________________________________________________")
 
             #現在時刻情報を取得
             dt_now = dt.datetime.now()
@@ -1657,8 +1659,6 @@ if st.session_state.show_page:
             if "result_bool" not in st.session_state:
                 # クラスを利用してresultにデータを保存する
                 st.session_state.result.append(Simulation_Results_instance)
-                # データフレームを利用してresultにデータを保存する
-                st.session_state.result_df = pd.concat([st.session_state.result_df, Simulation_Results_df], ignore_index=True)
 
                 #データベースに保存する
                 insert_data_to_db(st.session_state.personal_df, Simulation_Results_df)
@@ -1681,7 +1681,7 @@ if st.session_state.show_page:
         st.button("キャンセル",on_click=lambda: change_page(2))
 
         #購入株式数
-        st.session_state.buy_num = st.slider("売却株式数", 100, 1000, st.session_state.get("buy_num", 100),step=100)
+        st.session_state.buy_num = st.slider("購入株式数", 100, 1000, st.session_state.get("buy_num", 100),step=100)
 
         if "Rationale_for_purchase" not in st.session_state:
             st.session_state.Rationale_for_purchase = "指定なし"
@@ -2021,7 +2021,6 @@ else:
         # ユーザ名が存在する場合、resultには(1,)のようなタプルが返され、存在しない場合はNoneが返されます。
         return result is not None        
 
-
     # アカウントを新規作成する
     def page2_3_a():
 
@@ -2034,7 +2033,8 @@ else:
         # アカウント名がすでに使われている場合はメッセージを出力してキャンセルする
         if check_acount_name(st.session_state.acount_name ):
             st.sidebar.write("そのアカウント名はすでに使われているため使用できません")
-            # st.session_state.acount_name = ""
+            st.session_state.acount_name = ""
+            change_page2("3_a")
 
         st.session_state.acount_age = st.text_input("年齢を入力してください", value=st.session_state.get("acount_age", ""))
         st.session_state.acount_sex = st.selectbox("性別を入力してください", ("男", "女"), index=0 if st.session_state.get("acount_sex", "男") == "男" else 1)
@@ -2067,7 +2067,7 @@ else:
         st.session_state.Coordination = st.slider("協調性", 0, 6, st.session_state.get("Coordination", 6))
         st.session_state.Neuroticism = st.slider("神経症傾向", 0, 6, st.session_state.get("Neuroticism", 6))
 
-        if not check_acount_name(st.session_state.acount_name):
+        if not check_acount_name(st.session_state.acount_name) and (st.session_state.acount_name != ""):
             st.button("アカウントを作成する",on_click=lambda: create_acount())
 
         st.button("戻る",on_click=lambda: change_page2(3))
@@ -2083,10 +2083,12 @@ else:
         # st.write("########################################")
 
         # データベースの中身を確認する
+        st.write("Trade_Simulate.db")
         check_db()
+
         st.write("_______________________________________________________________________________________________________")
         # データベースに接続
-        conn = sqlite3.connect('my_database.db')
+        conn = sqlite3.connect('db/my_database.db')
 
         # personal_info テーブルからすべてのデータを取得
         query = "SELECT * FROM personal_info"
@@ -2101,8 +2103,8 @@ else:
         conn.close()
 
         # Streamlit でデータを表示
+        st.write("my_database.db")
         st.write(df)
-        st.write("_______________________________________________________________________________________________________")
         st.write(df2)
         # st.write(df3)
         # st.write(st.session_state.num)
@@ -2113,9 +2115,61 @@ else:
 
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
 
+    def display_image(num):
+        return f"image/image_{num}.png" 
+
+    def up_n():
+        if st.session_state.n < 20:
+            st.session_state.n += 1
+
+    def down_n():
+        if st.session_state.n > 1:
+            st.session_state.n -= 1
+
+    # このシステムの使い方について
+    def page2_5_a():
+        st.title("このシステムの使い方")
+        st.write("_______________________________________________________________________________________________________")
+
+        if "n" not in st.session_state:
+            st.session_state.n = 1 
+
+        col7, col8, col9 = st.columns((1, 8, 1))
+        with col7:
+            for i in range(12):
+                st.write("")
+
+            st.button(" ＜ ",on_click=down_n)
+
+        with col8:
+            st.image(display_image(st.session_state.n), use_column_width=True)
+
+        with col9:
+            for i in range(12):
+                st.write("")
+
+            st.button(" ＞ ",on_click=up_n)
+        st.write("_______________________________________________________________________________________________________")
+
+        if st.session_state.n == 1:
+            st.write("ここに説明1を書く")
+
+        if st.session_state.n == 2:
+            st.write("ここに説明2を書く")
+
+        if st.session_state.n == 3:
+            st.write("ここに説明3を書く")
+
+        st.write("_______________________________________________________________________________________________________")
+        st.button("戻る",on_click=lambda: change_page2(5))
+
     # シミュレーションについて
     def page2_5():
         st.title("このシミュレーションについて")
+        st.write("################################################################################")
+
+        # st.button("このシステムの使い方", on_click=change_page2("5_a"))
+        st.button("このシステムの使い方",on_click=lambda: change_page2("5_a"))
 
         st.write("################################################################################")
 
@@ -2140,6 +2194,7 @@ else:
         st.write("################################################################################")
 
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
+
 
     # 簡易結果画面表示
     def page2_6():
@@ -2186,14 +2241,8 @@ else:
         weekness = target_action_type["欠点"][0]
         advice_text = target_action_type["アドバイス"][0]
 
-
+        st.write("_______________________________________________________________________________________________________")
         st.subheader("全体の投資傾向について")
-        st.write("################################################################################")
-
-        # st.write("投資傾向分類結果を書く")
-        # st.write(f"運用成績：{st.session_state.benef_temp}")
-
-        # action_type = "テクニカル分析型"
 
         st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">投資行動型</p>', unsafe_allow_html=True)
         st.markdown(f'<p style="font-family:fantasy; color:blue; font-size: 24px;">{action_type}</p>', unsafe_allow_html=True)
@@ -2205,9 +2254,9 @@ else:
         st.write(advice_text)
         st.session_state.check = False
 
+        st.write("################################################################################")
         check = st.checkbox("詳細な内容を表示", value = st.session_state.check)
         if check:
-            st.write("################################################################################")
             st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">個人の性格</p>', unsafe_allow_html=True)
             st.write(st.session_state.personal)
             
@@ -2274,7 +2323,7 @@ else:
                 # Streamlitに表示
                 st.pyplot(fig)
 
-            st.write("################################################################################")
+        st.write("################################################################################")
 
         st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">行動経済学の指摘事項</p>', unsafe_allow_html=True)
         # if "advice_temp" not in st.session_state:
@@ -2295,10 +2344,9 @@ else:
                 st.write(f"　→ {target_BE['アドバイス'][0]}")
 
 
-        st.write("################################################################################")
+        st.write("_______________________________________________________________________________________________________")
 
         st.subheader("各取引について")
-        st.write("################################################################################")
 
         # st.write("各種投資行動の説明を書く")
 
@@ -2351,7 +2399,7 @@ else:
 
             st.write(f"{target_BE2['アドバイス'][0]}")
 
-        st.write("################################################################################")
+        st.write("_______________________________________________________________________________________________________")
 
         st.button("戻る", key='uniq_key_6',on_click=lambda: change_page2(2))
 
@@ -2375,6 +2423,9 @@ else:
 
     if st.session_state.page_id2 == "page2_5":
         page2_5()
+
+    if st.session_state.page_id2 == "page2_5_a":
+        page2_5_a()
 
     if st.session_state.page_id2 == "page2_6":
         page2_6()
