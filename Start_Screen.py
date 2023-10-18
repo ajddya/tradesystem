@@ -255,13 +255,9 @@ def changeable_init():
     if "result" not in st.session_state:
         st.session_state.result = [] 
 
-    # #create_chose_companiesの状態を保持
-    # if "create_chose_companies_executed" not in st.session_state: 
-    #     create_chose_companies()
-    #     st.session_state.create_chose_companies_executed = True
+    if "n" not in st.session_state:
+        st.session_state.n = 1 
 
-    # if "selected_company" not in st.session_state:
-    #     st.session_state.selected_company = st.session_state.chose_companies_name_list[0]
 changeable_init()
 
 
@@ -645,6 +641,7 @@ def some_trade_advice(buy_log, sell_log):
         max_close_KK = after_sell_day_KK[after_sell_day_KK['Close']==after_sell_day_KK['Close'].max()]['Close'].iloc[0]
 
         if sell_day_KK < max_close_KK:
+            # if (max_close_KK - sell_day_KK) > pluss_benef_df.iloc[i]['利益']:
             # 1つの行をDataFrameとして連結する
             temp_df = pd.DataFrame(pluss_benef_df.iloc[i]).transpose()
             present_oriented_df = pd.concat([present_oriented_df, temp_df], ignore_index=True)
@@ -841,18 +838,18 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
     high_line = 100
     low_line = 50
 
-    LEVEL = 1
-
-    if LEVEL == 1:
+    # LEVEL = 1
+    # レベルごとに取引回数の多いライン、少ないラインを定義する
+    if st.session_state.level_id == "LEVEL_1":
         high_line /= 12
         low_line /= 12
-    elif LEVEL == 2:
+    elif st.session_state.level_id == "LEVEL_2":
         high_line /= 4
         low_line /= 4
-    elif LEVEL == 3:
+    elif st.session_state.level_id == "LEVEL_3":
         high_line /=2
         low_line /= 2
-    elif LEVEL == 4:
+    elif st.session_state.level_id == "LEVEL_4":
         high_line /= 1
         low_line /= 1
 
@@ -890,9 +887,9 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
         if buy_reason in buy_reason_Positive:
             Positive += (buy_reason_ratios[buy_reason] / 2)
         if buy_reason in buy_reason_Emotion:
-            Emotion += (buy_reason_ratios[buy_reason] / 2)
+            Emotion += (buy_reason_ratios[buy_reason])
         if buy_reason in buy_reason_Technical:
-            Technical += (buy_reason_ratios[buy_reason])
+            Technical += (buy_reason_ratios[buy_reason] * 1.5)
 
     for sell_reason in sell_reason_ratios.index.values:
         if sell_reason in sell_reason_Conservative:
@@ -902,9 +899,9 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
         if sell_reason in sell_reason_Positive:
             Positive += (sell_reason_ratios[sell_reason] / 2)
         if sell_reason in sell_reason_Emotion:
-            Emotion += (sell_reason_ratios[sell_reason] / 2)        
+            Emotion += (sell_reason_ratios[sell_reason])        
         if sell_reason in sell_reason_Technical:
-            Technical += (sell_reason_ratios[sell_reason])
+            Technical += (sell_reason_ratios[sell_reason] * 1.5)
             
     # 運用成績・取引量から分類型にポイントを与える
     high_trade_value = 500000
@@ -1853,6 +1850,8 @@ else:
         st.button("これまでの実績", on_click=lambda: change_page2(2))
         st.button("アカウント設定", on_click=lambda: change_page2(3))
 
+
+
         st.session_state.level_id = st.selectbox(
             "レベルセレクト",
             ["LEVEL_1", "LEVEL_2", "LEVEL_3", "LEVEL_4"],
@@ -1874,6 +1873,8 @@ else:
         if st.session_state.level_id == "LEVEL_4":
             st.session_state.all_range_end = dt.datetime(2022,1,1) 
             st.write("１年で +20万円利益を出してください")
+
+
 
         st.button('シミュレーションをはじめから始める',on_click=lambda: start_sym(1))
 
@@ -1921,7 +1922,7 @@ else:
 
     def load_data(acount_name):
         # データベースに接続
-        conn = sqlite3.connect('my_database.db')
+        conn = sqlite3.connect('db/my_database.db')
         cursor = conn.cursor()        
 
         # SQLクエリで該当するデータを取得
@@ -2008,7 +2009,7 @@ else:
     # アカウント名がデータベースにあるかをチェックする
     def check_acount_name(acount_name):
         # データベースに接続
-        conn = sqlite3.connect('my_database.db')
+        conn = sqlite3.connect('db/my_database.db')
         cursor = conn.cursor()
 
         # SQLクエリで指定されたユーザ名が存在するか確認
@@ -2119,7 +2120,7 @@ else:
         return f"image/image_{num}.png" 
 
     def up_n():
-        if st.session_state.n < 20:
+        if st.session_state.n < 12:
             st.session_state.n += 1
 
     def down_n():
@@ -2131,12 +2132,9 @@ else:
         st.title("このシステムの使い方")
         st.write("_______________________________________________________________________________________________________")
 
-        if "n" not in st.session_state:
-            st.session_state.n = 1 
-
         col7, col8, col9 = st.columns((1, 8, 1))
         with col7:
-            for i in range(12):
+            for i in range(10):
                 st.write("")
 
             st.button(" ＜ ",on_click=down_n)
@@ -2145,43 +2143,68 @@ else:
             st.image(display_image(st.session_state.n), use_column_width=True)
 
         with col9:
-            for i in range(12):
+            for i in range(10):
                 st.write("")
 
             st.button(" ＞ ",on_click=up_n)
         st.write("_______________________________________________________________________________________________________")
 
         if st.session_state.n == 1:
-            st.write("ここに説明1を書く")
+            st.write("本システムでは、ユーザにデモトレードを実施してもらいそこから得られた運用成績や売買データなどからアドバイスを提供します。")
 
         if st.session_state.n == 2:
-            st.write("ここに説明2を書く")
+            st.write("ホーム画面にある各ボタンでは以下のことができます。")
+            colored_text1 = f"<span style='font-size:15px'><span style='color:red'> 投資経験がない方はこちらへ </span> </span>　：　株式投資に関する基本的な情報を提供しています。"
+            st.markdown(colored_text1, unsafe_allow_html=True)
+            colored_text2 = f"<span style='font-size:15px'><span style='color:red'> このシミュレーションについて </span> </span>　：　"
+            st.markdown(colored_text2, unsafe_allow_html=True)
+            st.write("このシステムの使い方やシステムを使う上での注意事項などがわかります。")
+            colored_text3 = f"<span style='font-size:15px'><span style='color:red'> これまでの実績 </span> </span>　：　これまでのシミュレーションの結果をここから見ることができます。"
+            st.markdown(colored_text3, unsafe_allow_html=True)
+            colored_text4 = f"<span style='font-size:15px'><span style='color:red'> レベルセレクト </span> </span>　：　LEVEL1〜LEVEL4までの難易度を設定できます。"
+            st.markdown(colored_text4, unsafe_allow_html=True)
+
 
         if st.session_state.n == 3:
-            st.write("ここに説明3を書く")
+            st.write("アカウントがない場合は、「アカウント設定」から作成できます。アカウントを設定及びレベルを選択するとシミュレーションを始められます。")
+
+        if st.session_state.n == 4:
+            st.write("シミュレーションが始まると日経平均株価及び購入可能銘柄が20個表示されます。")
+            st.write("銘柄には、「企業名」「現在の株価」「直近20日間のチャート」の情報が表示されます。")
+
+        if st.session_state.n == 5:
+            st.write("各銘柄の詳細な情報を見るもしくは購入/売却がしたい場合は、株価を見るというボタンを押してください。")
+
+        if st.session_state.n == 6:
+            st.write("ここでは詳細な株価の情報を見ることができます。")
+
+        if st.session_state.n == 7:
+            st.write("下の方にスクロールしていくと、この銘柄の現在の株価がわかります。")
+            st.write("また、「企業情報を見る」ボタンを押すとこの企業の業績など様々な情報を見ることができます。")
+
+        if st.session_state.n == 8:
+            st.write("さらに、ここでこの銘柄の購入/売却ができます。")
+
+        if st.session_state.n == 9:
+            st.write("購入画面では、購入株式数や購入根拠を選択できます。")
+            st.write("購入根拠は後の分析で使用しますので、その銘柄を購入する上で最も重要視しているものを選択してください。")
+
+        if st.session_state.n == 10:
+            st.write("購入した銘柄はサイドバーもしくは「保有株式へ」から見ることができます。")
+
+        if st.session_state.n == 11:
+            st.write("「1日進める」もしくは「１週間進める」を押すと時間が進み各銘柄の株価が更新されます。　（更新には少し時間がかかります）")
+
+        if st.session_state.n == 12:
+            st.write("時間はサイドバーから確認することができます。nowが現在時間、endが終了時間を表しており、nowがendを超えた時システムが終了し結果が表示されます。")
 
         st.write("_______________________________________________________________________________________________________")
         st.button("戻る",on_click=lambda: change_page2(5))
 
-    # シミュレーションについて
-    def page2_5():
-        st.title("このシミュレーションについて")
-        st.write("################################################################################")
-
-        # st.button("このシステムの使い方", on_click=change_page2("5_a"))
-        st.button("このシステムの使い方",on_click=lambda: change_page2("5_a"))
-
-        st.write("################################################################################")
-
-        # st.write("ここにシミュレーションの説明を書く")
-
-        st.header("システムの概要")
-        st.write("本システムでは、デモトレードの結果に基づいて、ユーザの投資傾向やそれに対するアドバイスを提供します。")
-
-        st.header("システムの目的")
-        st.write("投資に対する不安の軽減や投資の長期継続をサポートするためのシステムです。")
-
-        st.header("注意事項")
+    # 注意事項
+    def page2_5_b():
+        st.title("注意事項")
+        st.write("_______________________________________________________________________________________________________")
         st.subheader("1. 個人情報の取り扱いについて")
         st.write("本システムにおいて登録されるすべての情報は、厳重に保管・管理されます。無許可での第三者への提供や公開は行いません。\n 個人を特定できる情報は、システムの適切な運用とサポートの目的のみで使用され、それ以外の目的での利用や分析は行いません。")
 
@@ -2191,7 +2214,28 @@ else:
         st.subheader("3. デモトレードの結果に関する免責")
         st.write("本システムでのデモトレードの結果は、実際の金融市場での取引結果を保証するものではありません。\n ユーザが本システムの情報を元に実際の金融市場での取引を行った場合、その結果に対する一切の責任を当方は負いません。")
 
-        st.write("################################################################################")
+        st.write("_______________________________________________________________________________________________________")
+        st.button("戻る",on_click=lambda: change_page2(5))
+
+    # シミュレーションについて
+    def page2_5():
+        st.title("このシミュレーションについて")
+        st.write("########################################################################################")
+
+        st.header("システムの概要")
+        st.write("本システムでは、デモトレードの結果に基づいて、ユーザの投資傾向やそれに対するアドバイスを提供します。")
+
+        st.header("システムの目的")
+        st.write("投資に対する不安の軽減や投資の長期継続をサポートするためのシステムです。")
+
+        st.write("########################################################################################")
+
+        st.session_state.n = 1
+        st.button("このシステムの使い方",on_click=lambda: change_page2("5_a"))
+
+        st.button("注意事項",on_click=lambda: change_page2("5_b"))
+
+        st.write("########################################################################################")
 
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
 
@@ -2426,6 +2470,9 @@ else:
 
     if st.session_state.page_id2 == "page2_5_a":
         page2_5_a()
+
+    if st.session_state.page_id2 == "page2_5_b":
+        page2_5_b()
 
     if st.session_state.page_id2 == "page2_6":
         page2_6()
