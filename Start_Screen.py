@@ -148,7 +148,6 @@ def save_userdata():
  #全体の期間を指定
 all_range_start = dt.datetime(2020,9,1)
 # all_range_end = dt.datetime(2022,3,31)
-now_range = dt.datetime(2021,1,1)
 # now = dt.datetime(2021,1,1)
 
 #　選択可能銘柄の最大表示数
@@ -1036,8 +1035,8 @@ def reset():
     if "now" in st.session_state:
         del st.session_state.now
 
-    if "possess_money" in st.session_state:
-        del st.session_state.possess_money
+    # if "possess_money" in st.session_state:
+    #     del st.session_state.possess_money
 
     if "possess_KK_df" in st.session_state:
         del st.session_state.possess_KK_df
@@ -2078,6 +2077,7 @@ else:
             st.write(f"外交性：{st.session_state.personal_df['外交性'][0]}")
             st.write(f"協調性：{st.session_state.personal_df['協調性'][0]}")
             st.write(f"神経症傾向：{st.session_state.personal_df['神経症傾向'][0]}")
+            st.write(f"現在の保有資産：{st.session_state.possess_money}")
         st.write("_______________________________________________________________________________________________________")
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
 
@@ -2183,6 +2183,12 @@ else:
 
         st.subheader("3. デモトレードの結果に関する免責")
         st.write("本システムでのデモトレードの結果は、実際の金融市場での取引結果を保証するものではありません。\n ユーザが本システムの情報を元に実際の金融市場での取引を行った場合、その結果に対する一切の責任を当方は負いません。")
+
+        st.subheader("4. 本システムに関する免責")
+        st.write("本システムに記載されている情報は投資勧誘・提案を目的としたものではありません。")
+
+        st.subheader("5. システム内通貨に関して")
+        st.write("本システム内の資産に該当するシステム内通貨は、金銭または金銭的な価値を持つもの及び経済上の利益に該当するものと交換することはできません。")
 
         st.write("_______________________________________________________________________________________________________")
         st.button("戻る",on_click=lambda: change_page2(5))
