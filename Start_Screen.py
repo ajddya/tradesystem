@@ -99,33 +99,45 @@ def save_userdata():
         serialized_data = pickle.dumps(st.session_state.result)
         cursor.execute("INSERT OR REPLACE INTO simulation_results (ユーザ名, data) VALUES (?, ?)", (row["ユーザ名"], serialized_data))
 
-    # # session_stateの変数をデータベースに格納する
-    # cursor.execute("""
-    # CREATE TABLE IF NOT EXISTS session_state_val (
-    #     ユーザ名 TEXT PRIMARY KEY,
-    #     now, 
-    #     chose_companies, 
-    #     chose_companies_name_list,
-    #     possess_money,
-    #     possess_KK_df,
-    #     buy_log,
-    #     sell_log,
-    #     Dividends_df,
-    #     trade_advice_df,
-    #     advice_df,
-    #     create_chose_companies_executed,
-    #     selected_company 
-    # )
-    # """)
 
-    # # # データの挿入または更新
-    # cursor.execute("""
-    # INSERT OR REPLACE INTO session_state_val (メールアドレス, now, chose_companies, chose_companies_name_list, possess_money, possess_KK_df, buy_log, sell_log, Dividends_df, trade_advice_df, advice_df, create_chose_companies_executed, selected_company)
-    # VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (row["ユーザ名"], st.session_state.now, st.session_state.chose_companies, st.session_state.chose_companies_name_list, st.session_state.possess_money, st.session_state.possess_KK_df, st.session_state.buy_log, st.session_state.sell_log, st.session_state.Dividends_df, st.session_state.trade_advice_df, st.session_state.advice_df, st.session_state.create_chose_companies_executed, st.session_state.selected_company))
-    
+    # その他変数をデータベースに格納
+    save_values = {
+            "ユーザ名": [st.session_state.personal_df['ユーザ名'][0]],
+            "now": [st.session_state.now], 
+            "chose_companies_name_list": [st.session_state.chose_companies_name_list],  
+            "possess_money": [st.session_state.possess_money],
+            "possess_KK_df": [st.session_state.possess_KK_df],
+            "buy_log": [st.session_state.buy_log],
+            "sell_log": [st.session_state.sell_log],
+            "Dividends_df": [st.session_state.Dividends_df],
+            "advice_df": [st.session_state.advice_df],
+            "trade_advice_df": [st.session_state.trade_advice_df],
+            "create_chose_companies_executed": [st.session_state.create_chose_companies_executed],
+            "selected_company": [st.session_state.selected_company],
+            "result_bool": [st.session_state.result_bool],
+            "survey_bool": [st.session_state.survey_bool]
+    }
+    save_values_df = pd.DataFrame(save_values)
 
-    # cursor.execute("drop table personal_info")
-    # cursor.execute("drop table simulation_results")
+    save_values_df_serialized = save_values_df.to_json()
+
+    # テーブルを削除
+    # cursor.execute("drop table value_table")
+
+    # テーブルの作成
+    cursor.execute('CREATE TABLE IF NOT EXISTS value_table(value)')
+
+    # ユーザ名が一致するデータの取得
+    cursor.execute('SELECT * FROM value_table WHERE value LIKE ?', (f'%"{st.session_state.personal_df["ユーザ名"][0]}"%',))
+    data = cursor.fetchall()
+
+    # 一致するデータがある場合
+    if data:
+        # ユーザ名が一致するデータの削除
+        cursor.execute('DELETE FROM value_table WHERE value LIKE ?', (f'%"{st.session_state.personal_df["ユーザ名"][0]}"%',))
+
+    # データの挿入
+    cursor.execute('INSERT INTO value_table (value) VALUES (?)', (save_values_df_serialized,))
 
     # データベースの変更をコミット
     conn.commit()
@@ -212,6 +224,12 @@ def changeable_init():
     if "load_data_bool" not in st.session_state:
         st.session_state.load_data_bool = False
 
+    if "survey_bool" not in st.session_state:
+        st.session_state.survey_bool = False
+
+    if "result_bool" not in st.session_state:
+        st.session_state.result_bool = False
+    
     if "personal" not in st.session_state:
         st.session_state.personal = pd.DataFrame(columns=['性格'], index=['新規性', '誠実性', '外交性', '協調性', '神経症傾向'])
 
@@ -226,7 +244,7 @@ def changeable_init():
 
     #買付余力
     if "possess_money" not in st.session_state:
-        st.session_state.possess_money = 10000000
+        st.session_state.possess_money = 1000000
 
     #所有株式のデータフレーム作成
     if "possess_KK_df" not in st.session_state:
@@ -259,32 +277,6 @@ def changeable_init():
         st.session_state.n = 1 
 
 changeable_init()
-
-
-load_data = []
-
-# データベースから情報を取得する
-if load_data:
-    st.sidebar.write("データベースからデータを読み取りました")
-
-    st.session_state.account_created = True
-    st.session_state.personal = pd.DataFrame(columns=['性格'], index=['新規性', '誠実性', '外交性', '協調性', '神経症傾向'])
-    st.session_state.personal_df = pd.DataFrame(columns=['ユーザID', 'ユーザ名', '年齢', '性別', '投資経験の有無', '投資に関する知識の有無', '開放性', '誠実性', '外交性', '協調性', '神経症傾向'])
-    st.session_state.result = []
-
-    # st.session_state.now = 
-    # st.session_state.chose_companies = 
-    # st.session_state.chose_companies_name_list = 
-    # st.session_state.possess_money = 
-    # st.session_state.possess_KK_df = 
-    # st.session_state.buy_log = 
-    # st.session_state.sell_log = 
-    # st.session_state.Dividends_df = 
-    # st.session_state.trade_advice_df = 
-    # st.session_state.advice_df = 
-    # st.session_state.create_chose_companies_executed = 
-    # st.session_state.selected_company = 
-
 
 
 #_______________________________________________________________________________
@@ -792,6 +784,8 @@ def advice(buy_reason_ratios, buy_log, sell_log):
 
     return advice_df
 
+
+
 # 分類型の関数作成#___________________________________________________________________________________________________________________________________________________________________________________________________________
 # 分類する関数
 def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_ratios, trade_value, wield_grades):
@@ -932,6 +926,9 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
 
     return classify_type    
 
+
+
+
 # データベースに保存する関数作成_______________________________________________________________________________________________________________________________________________________________________________________________________
 # データの挿入
 def insert_data_to_db(private_data, result_data):
@@ -982,6 +979,41 @@ def check_db():
 
         # データベースの接続をクローズ
         conn.close()
+
+def insert_survey_to_db():
+
+    # データベースに接続
+    conn = sqlite3.connect('db/survey.db')
+    cursor = conn.cursor()
+
+    # テーブルを削除
+    # cursor.execute("drop table survey_info")
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS survey_info (
+        ユーザ名 TEXT,
+        ユーザID TEXT,
+        実施回数 TEXT,
+        システムの満足度 TEXT,
+        システムの正確性 TEXT,
+        システムの有用性 TEXT,
+        意見 TEXT
+    )
+    """)
+
+    # データの挿入または更新
+    cursor.execute("""
+    INSERT INTO survey_info (ユーザ名, ユーザID, 実施回数, システムの満足度, システムの正確性, システムの有用性, 意見)
+    VALUES (?, ?, ?, ?, ?, ?, ?)""", (st.session_state.acount_name, st.session_state.acount_ID, st.session_state.n, st.session_state.satisfaction, st.session_state.accurate, st.session_state.usefulness, st.session_state.opinion))
+
+    # データベースの変更をコミット
+    conn.commit()
+
+    # データベース接続のクローズ
+    conn.close()
+
+    st.session_state.survey_bool = True
+    change_page2(1)
 
 # システム管理_______________________________________________________________________________________________________________________________________________________________________
 
@@ -1036,6 +1068,10 @@ def reset():
 
     if "result_bool" in st.session_state:
         del st.session_state.result_bool
+
+    if "survey_bool" in st.session_state:
+        del st.session_state.survey_bool
+        
     
 def end_sym():
     st.session_state.show_page = False
@@ -1407,7 +1443,7 @@ if st.session_state.show_page:
         for i in range(0,len(st.session_state.possess_KK_df)):
             possess_money += st.session_state.possess_KK_df['現在の株価'][i] * st.session_state.possess_KK_df['保有株式数'][i]
         st.write(f"保有資産：{possess_money}")
-        benef = possess_money - 10000000
+        benef = possess_money - 1000000
         if benef < 0:
             colored_text = f"あなたは　<span style='font-size:30px'><span style='color:green'> {round(benef,1)}円</span> </span>の損失を出しました。"
             st.markdown(colored_text, unsafe_allow_html=True)
@@ -1653,7 +1689,7 @@ if st.session_state.show_page:
             #実績画面にデータを保存する
             Simulation_Results_instance = Simulation_Results(dates=dt_now_str, num=st.session_state.num, action_type=action_type, LEVEL=st.session_state.level_id, investment_result=benef, buy_log=st.session_state.buy_log, sell_log=st.session_state.sell_log, Dividends=st.session_state.Dividends_df, advice=st.session_state.advice_df, trade_advice=st.session_state.trade_advice_df)
 
-            if "result_bool" not in st.session_state:
+            if st.session_state.result_bool == False:
                 # クラスを利用してresultにデータを保存する
                 st.session_state.result.append(Simulation_Results_instance)
 
@@ -1667,7 +1703,10 @@ if st.session_state.show_page:
         else:
             st.write("株の取引が行われていないため結果を表示できません")
 
-        if st.button("スタート画面に戻る"):
+        if st.button(" シミュレーションを終了する "):
+            if st.session_state.survey_bool==False:
+                change_page2(7)
+            
             st.session_state.show_page = False
 
 
@@ -1822,30 +1861,31 @@ if st.session_state.show_page:
     st.sidebar.write("_______________________________________________________________________________________________________")
 
     # st.sidebar.button('シミュレーションを終了する',key='uniq_key_5', on_click=end_sym()):
-    if st.sidebar.button('シミュレーションを終了する'):
+    if st.sidebar.button('シミュレーションを中断する'):
         st.session_state.show_page = False
 
         
 #_____________________________________________________________スタート画面_________________________________________________________________________________________________________________________________
 
 else:
+    # ホーム画面
+    def start_system():
+        st.title("投資シミュレーションシステム")
+        st.image("image/home_screen.png")
+        st.button("このシステムの使い方を見る",on_click=lambda: change_page2(5))
+        st.button("スタート画面へ",on_click=lambda: change_page2(1))
+
     # スタート画面
     def page2_1():
         st.title("投資シミュレーションシステム")
         st.subheader("スタート画面")
-
-        # st.write("########################################")
-
-        # st.write("ここにシミュレーションの説明を書く")
-
-        # st.write("########################################")
 
         col5, col6 = st.columns((5, 5))
         with col5:
             st.button("投資経験がない方はこちらへ",on_click=lambda: change_page2(4))
 
         with col6:
-            st.button("このシミュレーションシステムについて", on_click=lambda: change_page2(5))
+            st.button("このシステムの使い方", on_click=lambda: change_page2(5))
 
         st.button("これまでの実績", on_click=lambda: change_page2(2))
         st.button("アカウント設定", on_click=lambda: change_page2(3))
@@ -1879,6 +1919,8 @@ else:
         st.button('シミュレーションをはじめから始める',on_click=lambda: start_sym(1))
 
         st.button('シミュレーションを続きから始める',on_click=lambda: start_sym(2))
+
+        st.button('データベースの確認',on_click=lambda: change_page2(99))
 
         if not st.session_state.personal_df.empty:
             save_userdata()
@@ -1964,6 +2006,39 @@ else:
 
         st.session_state.num = len(st.session_state.result) + 1
 
+        # その他変数データの取り出し
+        # ユーザ名が一致するデータの取得
+        cursor.execute('SELECT * FROM value_table WHERE value LIKE ?', (f'%"{acount_name}"%',))
+        data = cursor.fetchall()
+
+        # 一致するデータがある場合
+        if data:            
+            # データの JSON 文字列を取得
+            json_str = data[0][0]
+            
+            # JSON 文字列を DataFrame に変換
+            df = pd.read_json(json_str, convert_dates=['now'])
+            
+            st.session_state.now = df["now"][0]
+            st.session_state.chose_companies_name_list = df["chose_companies_name_list"][0]
+            st.session_state.possess_money = df["possess_money"][0]
+            st.session_state.possess_KK_df = pd.DataFrame(df["possess_KK_df"][0])
+            st.session_state.buy_log = pd.DataFrame(df["buy_log"][0])
+            st.session_state.sell_log = pd.DataFrame(df["sell_log"][0])
+            st.session_state.Dividends_df = pd.DataFrame(df["Dividends_df"][0])
+            st.session_state.advice_df = pd.DataFrame(df["advice_df"][0])
+            st.session_state.trade_advice_df = pd.DataFrame(df["trade_advice_df"][0])
+            st.session_state.create_chose_companies_executed = df["create_chose_companies_executed"][0]
+            st.session_state.selected_company = df["selected_company"][0]
+            st.session_state.result_bool = df["result_bool"][0]
+            st.session_state.survey_bool = df["survey_bool"][0]
+
+            st.session_state.chose_companies = []
+            for i in range(0,len(st.session_state.chose_companies_name_list)):
+                company_name = st.session_state.chose_companies_name_list[i]
+                index = st.session_state.c_master[st.session_state.c_master['企業名'] == company_name].index.values[0]
+                st.session_state.chose_companies.append(st.session_state.loaded_companies[index])
+
         # データベース接続のクローズ
         conn.close()
 
@@ -1973,15 +2048,15 @@ else:
     def page2_3():
         st.title("アカウント設定")
 
-        st.write("アカウントを持っていない場合はこちらから作成してください。（変更もこちらからできます。）")
-        st.button("アカウントを作成/変更する",on_click=lambda: change_page2("3_a"))
+        st.write("アカウントを持っていない場合はこちらから作成してください。")
+        st.button("アカウントを作成",on_click=lambda: change_page2("3_a"))
 
         st.write("アカウント名を入力して以前までのデータを取得することができます。")
         if not st.session_state.load_data_bool:
             if st.button("以前のデータを取得する"):
                 st.session_state.load_data_bool = True
 
-        # メールアドレスの情報によりデータを取得する
+        # アカウント名の情報によりデータを取得する
         if st.session_state.load_data_bool:
             col7, col8 = st.columns((7, 3))
             with col7:
@@ -2077,42 +2152,11 @@ else:
     def page2_4():
         st.title("投資について")
 
-        # st.write("########################################")
+        st.write("########################################")
 
-        # st.write("ここに投資についての説明を書く")
+        st.write("ここに投資についての説明を書く")
 
-        # st.write("########################################")
-
-        # データベースの中身を確認する
-        st.write("Trade_Simulate.db")
-        check_db()
-
-        st.write("_______________________________________________________________________________________________________")
-        # データベースに接続
-        conn = sqlite3.connect('db/my_database.db')
-
-        # personal_info テーブルからすべてのデータを取得
-        query = "SELECT * FROM personal_info"
-        df = pd.read_sql_query(query, conn)
-        query = "SELECT * FROM simulation_results"
-        df2 = pd.read_sql_query(query, conn)
-
-        # query = "SELECT * FROM session_state_val"
-        # df3 = pd.read_sql_query(query, conn)
-
-        # データベース接続をクローズ
-        conn.close()
-
-        # Streamlit でデータを表示
-        st.write("my_database.db")
-        st.write(df)
-        st.write(df2)
-        # st.write(df3)
-        # st.write(st.session_state.num)
-
-        st.write("_______________________________________________________________________________________________________")
-        # st.write(st.session_state.result)
-
+        st.write("########################################")
 
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
 
@@ -2127,9 +2171,27 @@ else:
         if st.session_state.n > 1:
             st.session_state.n -= 1
 
-    # このシステムの使い方について
-    def page2_5_a():
-        st.title("このシステムの使い方")
+    # 注意事項
+    def page2_5_b():
+        st.title("注意事項")
+        st.write("_______________________________________________________________________________________________________")
+        st.subheader("1. 個人情報の取り扱いについて")
+        st.write("本システムにおいて登録されるすべての情報は、厳重に保管・管理されます。無許可での第三者への提供や公開は行いません。\n 個人を特定できる情報は、システムの適切な運用とサポートの目的のみで使用され、それ以外の目的での利用や分析は行いません。")
+
+        st.subheader("2. 売買データの取り扱いについて")
+        st.write("ユーザが本システムで行う売買のデータは、デモトレードの結果の分析や改善のために利用される場合があります。\n すべてのトレードデータは匿名化され、個人を特定する情報と合わせて解析されることはありません")
+
+        st.subheader("3. デモトレードの結果に関する免責")
+        st.write("本システムでのデモトレードの結果は、実際の金融市場での取引結果を保証するものではありません。\n ユーザが本システムの情報を元に実際の金融市場での取引を行った場合、その結果に対する一切の責任を当方は負いません。")
+
+        st.write("_______________________________________________________________________________________________________")
+        st.button("戻る",on_click=lambda: change_page2(5))
+
+    # システムの使い方
+    def page2_5():
+        st.title("システムの使い方")
+        st.write("########################################################################################")
+
         st.write("_______________________________________________________________________________________________________")
 
         col7, col8, col9 = st.columns((1, 8, 1))
@@ -2167,78 +2229,64 @@ else:
 
         if st.session_state.n == 3:
             st.write("アカウントがない場合は、「アカウント設定」から作成できます。アカウントを設定及びレベルを選択するとシミュレーションを始められます。")
+            for i in range(5):
+                st.write("")
+
 
         if st.session_state.n == 4:
             st.write("シミュレーションが始まると日経平均株価及び購入可能銘柄が20個表示されます。")
             st.write("銘柄には、「企業名」「現在の株価」「直近20日間のチャート」の情報が表示されます。")
+            st.write("（選択可能銘柄は2023年10月時点の日経平均採用銘柄からランダムに20銘柄が表示されます。）")
+            for i in range(3):
+                st.write("")
 
         if st.session_state.n == 5:
             st.write("各銘柄の詳細な情報を見るもしくは購入/売却がしたい場合は、株価を見るというボタンを押してください。")
+            for i in range(5):
+                st.write("")
 
         if st.session_state.n == 6:
             st.write("ここでは詳細な株価の情報を見ることができます。")
+            for i in range(5):
+                st.write("")
 
         if st.session_state.n == 7:
             st.write("下の方にスクロールしていくと、この銘柄の現在の株価がわかります。")
             st.write("また、「企業情報を見る」ボタンを押すとこの企業の業績など様々な情報を見ることができます。")
+            for i in range(4):
+                st.write("")
 
         if st.session_state.n == 8:
             st.write("さらに、ここでこの銘柄の購入/売却ができます。")
+            for i in range(5):
+                st.write("")
 
         if st.session_state.n == 9:
             st.write("購入画面では、購入株式数や購入根拠を選択できます。")
             st.write("購入根拠は後の分析で使用しますので、その銘柄を購入する上で最も重要視しているものを選択してください。")
+            for i in range(4):
+                st.write("")
 
         if st.session_state.n == 10:
             st.write("購入した銘柄はサイドバーもしくは「保有株式へ」から見ることができます。")
+            for i in range(5):
+                st.write("")
 
         if st.session_state.n == 11:
             st.write("「1日進める」もしくは「１週間進める」を押すと時間が進み各銘柄の株価が更新されます。　（更新には少し時間がかかります）")
+            for i in range(5):
+                st.write("")
 
         if st.session_state.n == 12:
             st.write("時間はサイドバーから確認することができます。nowが現在時間、endが終了時間を表しており、nowがendを超えた時システムが終了し結果が表示されます。")
+            for i in range(5):
+                st.write("")
 
         st.write("_______________________________________________________________________________________________________")
-        st.button("戻る",on_click=lambda: change_page2(5))
-
-    # 注意事項
-    def page2_5_b():
-        st.title("注意事項")
-        st.write("_______________________________________________________________________________________________________")
-        st.subheader("1. 個人情報の取り扱いについて")
-        st.write("本システムにおいて登録されるすべての情報は、厳重に保管・管理されます。無許可での第三者への提供や公開は行いません。\n 個人を特定できる情報は、システムの適切な運用とサポートの目的のみで使用され、それ以外の目的での利用や分析は行いません。")
-
-        st.subheader("2. 売買データの取り扱いについて")
-        st.write("ユーザが本システムで行う売買のデータは、デモトレードの結果の分析や改善のために利用される場合があります。\n すべてのトレードデータは匿名化され、個人を特定する情報と合わせて解析されることはありません")
-
-        st.subheader("3. デモトレードの結果に関する免責")
-        st.write("本システムでのデモトレードの結果は、実際の金融市場での取引結果を保証するものではありません。\n ユーザが本システムの情報を元に実際の金融市場での取引を行った場合、その結果に対する一切の責任を当方は負いません。")
-
-        st.write("_______________________________________________________________________________________________________")
-        st.button("戻る",on_click=lambda: change_page2(5))
-
-    # シミュレーションについて
-    def page2_5():
-        st.title("このシミュレーションについて")
-        st.write("########################################################################################")
-
-        st.header("システムの概要")
-        st.write("本システムでは、デモトレードの結果に基づいて、ユーザの投資傾向やそれに対するアドバイスを提供します。")
-
-        st.header("システムの目的")
-        st.write("投資に対する不安の軽減や投資の長期継続をサポートするためのシステムです。")
-
-        st.write("########################################################################################")
-
-        st.session_state.n = 1
-        st.button("このシステムの使い方",on_click=lambda: change_page2("5_a"))
 
         st.button("注意事項",on_click=lambda: change_page2("5_b"))
 
-        st.write("########################################################################################")
-
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
-
 
     # 簡易結果画面表示
     def page2_6():
@@ -2447,8 +2495,99 @@ else:
 
         st.button("戻る", key='uniq_key_6',on_click=lambda: change_page2(2))
 
+    # システムの評価アンケート
+    def page2_7():
+        st.title("システムの評価")
+        st.write("このシステムの利用に関してアンケートを実施しております。ご協力お願いします。")
+
+
+        # システムの満足度
+        satisfaction_arrow = [
+            "満足している",
+            "まあまあ満足している",
+            "あまり満足していない",
+            "満足していない"
+        ]
+        st.session_state.satisfaction = st.radio("システムの満足度", satisfaction_arrow)
+
+        # システムの正確性に関して
+        accurate_arrow = [
+            "合っている",
+            "合っていない",
+            "わからない"
+        ]
+        st.session_state.accurate = st.radio("システムの評価は合っていると思いますか。", accurate_arrow)
+
+        # システムの有用性に関して
+        usefulness_arrow = [
+            "満足している",
+            "まあまあ満足している",
+            "あまり満足していない",
+            "満足していない"
+        ]
+        st.session_state.usefulness = st.radio("このシステムのアドバイスは役にたつと思いますか。", usefulness_arrow)
+
+        st.session_state.opinion = st.text_input("このシステムに関してご意見があればお聞かせください。", value=st.session_state.get("opinion", ""))
+
+        st.button("システムの評価を送る",on_click=insert_survey_to_db)
+
+    # データベースの確認
+    def page2_99():
+        # データベースの中身を確認する
+        st.write("Trade_Simulate.db")
+        check_db()
+
+        st.write("_______________________________________________________________________________________________________")
+        # データベースに接続
+        conn = sqlite3.connect('db/my_database.db')
+
+        # personal_info テーブルからすべてのデータを取得
+        query = "SELECT * FROM personal_info"
+        df = pd.read_sql_query(query, conn)
+        query = "SELECT * FROM simulation_results"
+        df2 = pd.read_sql_query(query, conn)
+
+        # Streamlit でデータを表示
+        st.write("my_database.db")
+        st.write(df)
+        st.write(df2)
+
+        c = conn.cursor()
+        c.execute('SELECT * FROM value_table ')
+        for row in c:
+            serialized_data = row[0]
+
+            deserialized_data = pd.read_json(serialized_data)
+            st.write(deserialized_data)
+
+        c.close()
+
+        # データベース接続をクローズ
+        conn.close()
+
+        st.write("_______________________________________________________________________________________________________")
+        # データベースに接続
+        conn = sqlite3.connect('db/survey.db')
+
+        # personal_info テーブルからすべてのデータを取得
+        query = "SELECT * FROM survey_info"
+        df3 = pd.read_sql_query(query, conn)
+
+        # データベース接続をクローズ
+        conn.close()
+
+        st.write("survey.db")
+        st.write(df3)
+
+        st.write("_______________________________________________________________________________________________________")
+        st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
+
+
     if "page_id2" not in st.session_state:
-        st.session_state.page_id2 = "page2_1"
+        st.session_state.page_id2 = "start_system"
+
+    if st.session_state.page_id2 == "start_system":
+        start_system()
 
     if st.session_state.page_id2 == "page2_1":
         page2_1()
@@ -2468,12 +2607,15 @@ else:
     if st.session_state.page_id2 == "page2_5":
         page2_5()
 
-    if st.session_state.page_id2 == "page2_5_a":
-        page2_5_a()
-
     if st.session_state.page_id2 == "page2_5_b":
         page2_5_b()
 
     if st.session_state.page_id2 == "page2_6":
         page2_6()
+
+    if st.session_state.page_id2 == "page2_7":
+        page2_7()
+
+    if st.session_state.page_id2 == "page2_99":
+        page2_99()
 
