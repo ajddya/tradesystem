@@ -245,6 +245,10 @@ def changeable_init():
     if "possess_money" not in st.session_state:
         st.session_state.possess_money = 1000000
 
+    #初期の買付余力
+    if "possess_money_init" not in st.session_state:
+        st.session_state.possess_money_init = 1000000
+
     #所有株式のデータフレーム作成
     if "possess_KK_df" not in st.session_state:
         st.session_state.possess_KK_df = pd.DataFrame(columns=['企業名', '保有株式数', '現在の株価', '1株あたりの株価', '利益'])
@@ -260,7 +264,7 @@ def changeable_init():
         st.session_state.Dividends_df = pd.DataFrame(columns=['企業名', '属性', '配当金', "配当基準日", "実施"])
 
     if "trade_advice_df" not in st.session_state:
-        st.session_state.trade_advice_df = pd.DataFrame(columns=['企業名', '指摘事項'])
+        st.session_state.trade_advice_df = pd.DataFrame(columns=['企業名', '指摘事項', '指摘銘柄数'])
 
     if "advice_df" not in st.session_state:
         st.session_state.advice_df = pd.DataFrame(columns=['指摘事項'])  
@@ -588,8 +592,8 @@ def display_distribution2(data):
 
 # 各取引のアドバイス生成#_____________________________________________________________________________________________________________________________
 def some_trade_advice(buy_log, sell_log):
-    trade_advice_df = pd.DataFrame(columns=['企業名', '指摘事項'])
-    trade_advice_df_temp = pd.DataFrame(columns=['企業名', '指摘事項'])
+    trade_advice_df = pd.DataFrame(columns=['企業名', '指摘事項', '指摘銘柄数'])
+    trade_advice_df_temp = pd.DataFrame(columns=['企業名', '指摘事項', '指摘銘柄数'])
     
     #損失回避性
     loss_df  = sell_log[sell_log['売却根拠'] == '利益確定売り']
@@ -597,6 +601,7 @@ def some_trade_advice(buy_log, sell_log):
     if loss_df.empty == False:
         trade_advice_df_temp['企業名'] = [loss_df.iloc[0]['企業名']]
         trade_advice_df_temp['指摘事項'] = ['損失回避性']
+        trade_advice_df_temp['指摘銘柄数'] = [len(loss_df)]
         trade_advice_df = pd.concat([trade_advice_df,trade_advice_df_temp], ignore_index=True)
     
     #アンカリング効果　buy_logから投資根拠が「安いと思ったから」のものを持ってくる
@@ -605,6 +610,7 @@ def some_trade_advice(buy_log, sell_log):
     if anc_df.empty == False:
         trade_advice_df_temp['企業名'] = [anc_df.iloc[0]['企業名']]
         trade_advice_df_temp['指摘事項'] = ['アンカリング効果']
+        trade_advice_df_temp['指摘銘柄数'] = [len(anc_df)]
         trade_advice_df = pd.concat([trade_advice_df,trade_advice_df_temp], ignore_index=True)
     
     #感応度逓減性　ブレークイーブン効果などと一緒に表示させる
@@ -612,7 +618,7 @@ def some_trade_advice(buy_log, sell_log):
     # sensory_df2 = buy_log[buy_log["購入金額"] == buy_log["購入金額"].min()]
     # sensory_df = pd.concat([sensory_df1,sensory_df2],ignore_index=True)
     
-    #現在思考バイアス　売った後1ヶ月以内に最大値があるなら指摘
+    #現在志向バイアス　売った後1ヶ月以内に最大値があるなら指摘
     pluss_benef_df = sell_log[sell_log['利益'] > 0]
     pluss_benef_df = pluss_benef_df.reset_index(drop=True)
 
@@ -632,14 +638,15 @@ def some_trade_advice(buy_log, sell_log):
         max_close_KK = after_sell_day_KK[after_sell_day_KK['Close']==after_sell_day_KK['Close'].max()]['Close'].iloc[0]
 
         if sell_day_KK < max_close_KK:
-            # if (max_close_KK - sell_day_KK) > pluss_benef_df.iloc[i]['利益']:
+            if (max_close_KK - sell_day_KK) > (pluss_benef_df.iloc[i]['利益']/pluss_benef_df.iloc[i]['売却株式数']):
             # 1つの行をDataFrameとして連結する
-            temp_df = pd.DataFrame(pluss_benef_df.iloc[i]).transpose()
-            present_oriented_df = pd.concat([present_oriented_df, temp_df], ignore_index=True)
+                temp_df = pd.DataFrame(pluss_benef_df.iloc[i]).transpose()
+                present_oriented_df = pd.concat([present_oriented_df, temp_df], ignore_index=True)
         
     if present_oriented_df.empty == False:
         trade_advice_df_temp['企業名'] = [present_oriented_df.iloc[0]['企業名']]
         trade_advice_df_temp['指摘事項'] = ['現在志向バイアス']
+        trade_advice_df_temp['指摘銘柄数'] = [len(present_oriented_df)]
         trade_advice_df = pd.concat([trade_advice_df,trade_advice_df_temp], ignore_index=True)
     
     #ブレークイーブン効果　購入日の株価より小さな株価が売却びまで連続で続いている場合に指摘
@@ -686,6 +693,7 @@ def some_trade_advice(buy_log, sell_log):
         # print('感応度逓減性')
         trade_advice_df_temp['企業名'] = [minas_seqence_df.iloc[0]['企業名']]
         trade_advice_df_temp['指摘事項'] = ['ブレークイーブン効果']
+        trade_advice_df_temp['指摘銘柄数'] = [len(minas_seqence_df)]
         trade_advice_df = pd.concat([trade_advice_df,trade_advice_df_temp], ignore_index=True)
         
     return trade_advice_df
@@ -1080,6 +1088,7 @@ def start_sym(n):
     if n == 1:
         reset()
         if st.session_state.account_created==True:
+            st.session_state.possess_money_init = st.session_state.possess_money
             st.session_state.show_page = True
         else:
             st.sidebar.write("アカウント情報を入力してください")
@@ -1442,7 +1451,7 @@ if st.session_state.show_page:
         for i in range(0,len(st.session_state.possess_KK_df)):
             possess_money += st.session_state.possess_KK_df['現在の株価'][i] * st.session_state.possess_KK_df['保有株式数'][i]
         st.write(f"保有資産：{possess_money}")
-        benef = possess_money - 1000000
+        benef = possess_money - st.session_state.possess_money_init
         if benef < 0:
             colored_text = f"あなたは　<span style='font-size:30px'><span style='color:green'> {round(benef,1)}円</span> </span>の損失を出しました。"
             st.markdown(colored_text, unsafe_allow_html=True)
@@ -1494,6 +1503,23 @@ if st.session_state.show_page:
             advice_text = target_action_type["アドバイス"][0]
 
             st.write("_______________________________________________________________________________________________________")
+            st.subheader("総合評価")
+            # 枠線で囲む文章
+            text = "これは枠線で囲まれた文章です。"            
+
+            html_code = f"""
+            <div style="
+                border: 2px solid #000000;
+                border-radius: 5px;
+                padding: 10px;
+            ">
+                {text}
+            </div>
+            """
+            st.markdown(html_code, unsafe_allow_html=True)
+
+            st.write("_______________________________________________________________________________________________________")
+
             st.subheader("全体の投資傾向について")
 
             # st.write("投資傾向分類結果を書く")
@@ -2151,13 +2177,114 @@ else:
    # 投資について 
     def page2_4():
         st.title("投資について")
+        st.write("_______________________________________________________________________________________________________")
+        check1 = st.checkbox("株式投資に関して")
+        if check1:
+            st.subheader("株式投資の基本的な仕組み")
+            st.markdown('<p style="font-family:monospace; color:black ; font-size: 18px;　text-decoration: underline;">・　株式とは何か、株式を購入することで何が得られるのか　</p>', unsafe_allow_html=True)
+            st.write("株式とは、企業の一部を所有する権利のことです。株式を購入すると、その企業の利益に応じて配当を受け取ることができるほか、株価が上がれば売却時に利益を得ることができます。")
 
-        st.write("########################################")
+            st.markdown('<p style="font-family:monospace; color:black ; font-size: 18px;　text-decoration: underline;">・　株価の変動の原因とその影響　</p>', unsafe_allow_html=True)
+            st.write("株価は、企業の業績や経済状況、市場の需給バランスなど様々な要因によって変動します。株価が上がれば利益を得ることができますが、下がれば損失を被ることもあります。")
 
-        st.write("ここに投資についての説明を書く")
+            st.markdown('<p style="font-family:monospace; color:black ; font-size: 18px;　text-decoration: underline;">・　配当とは何か　</p>', unsafe_allow_html=True)
+            st.write("配当とは、企業が利益を出した際に、その一部を株主に分配することです。配当は通常、現金で受け取ることができます。各銘柄の配当基準日にその銘柄の株を持っていた場合に配当金を受け取ることができます。")
 
-        st.write("########################################")
 
+            st.subheader("リスクとリターン")
+            st.markdown('<p style="font-family:monospace; color:black ; font-size: 18px;　text-decoration: underline;">・　株式投資におけるリスクの種類とその対処方法　</p>', unsafe_allow_html=True)
+            st.write("株式投資には、株価の変動によるリスクや企業の倒産リスクなどがあります。これらのリスクを軽減するためには、複数の企業の株式を購入してリスクを分散することや、十分な情報収集を行うことが大切です。")
+
+            st.markdown('<p style="font-family:monospace; color:black ; font-size: 18px;　text-decoration: underline;">・　リターンの期待値とその実現の可能性　</p>', unsafe_allow_html=True)
+            st.write("株式投資によるリターンは、株価の上昇や配当によって得られます。しかし、リターンの期待値は常に変動するため、投資の際には慎重な判断が必要です。")
+
+
+        st.write("_______________________________________________________________________________________________________")
+        check2 = st.checkbox("チャートグラフの見方")
+        if check2:
+            st.image("image/image_elem_1.png")
+            st.image("image/image_elem_2.png")
+
+            st.write("出来高は、その日の取引量の多さを示します。")
+            st.write("ローソク足チャートは、特定の期間における株価の始値、終値、高値、安値を「ローソク」と呼ばれる形で表したものです。ローソクの色や形によって、株価の上昇や下降が一目でわかります。")
+            st.write("始値より終値が高くなったものを陽線、その逆を陰線と呼びます。陽線、陰線の味方は以下のようになります。")
+            st.write("始値：その日の最初の株価の値を示します。")
+            st.write("終値：その日の最後の株価の値を示します。")
+            st.write("高値：その日の株価が一番高くなった時点の値を示します。")
+            st.write("安値：その日の株価が一番低くなった時点の値を示します。")
+
+        st.write("_______________________________________________________________________________________________________")
+        check3 = st.checkbox("企業情報の見方")
+        if check3:
+            st.subheader("[1] 企業の安定性を見る指標")
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">①　自己資本比率</p>', unsafe_allow_html=True)
+            st.write("返済不要の自己資本が全体の資本調達の何%あるかを示す数値")
+            st.write("自己資本比率が高いほど経営は安定し、倒産しにくい会社だと考えられます。一般に自己資本比率が50%なら優良企業、40%以上なら倒産しにくい会社と言われています。")
+            st.write("")
+
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">② 流動比率</p>', unsafe_allow_html=True)
+            st.write("企業の短期間の支払い能力を示す指標。高い方が良いとされている。")
+            st.write("流動比率は、資金繰りが怪しくなっている企業を簡単に調べる目安になります。")
+            st.write("")
+
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">③ キャッシュフロー</p>', unsafe_allow_html=True)
+            st.write("企業活動などによって得られた収入から、外部への支出を引いて、手元に残る資金の流れを示したもの")
+            st.write("一般に優良な会社の場合以下のようになっているのが良いとされる。")
+            st.write("・営業キャッシュフローがプラス　　　（営業成績好調）")
+            st.write("・投資キャッシュフローがマイナス　　（積極的な設備投資）")
+            st.write("・財務キャッシュフローがマイナス　　（借入金の返済）")
+            st.write("")
+
+
+            st.subheader("[2] 企業の成長性、収益性を見る指標")
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">① 売上高の推移</p>', unsafe_allow_html=True)
+            st.write("売上高は、はっきりと、企業の成長性を示し、株価を長期的に押し上げる要因になっている")
+            st.write("")
+
+
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">② EPS</p>', unsafe_allow_html=True)
+            st.write("１株あたりのその年１年間の純利益のこと")
+            st.write("企業の純利益が上がる、もしくは発行済み株式数が減ることでEPSは増加する")
+            st.write("")
+
+
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">③ ROE（株主資本利益率）</p>', unsafe_allow_html=True)
+            st.write("株主資本が企業の収益にどれだけ関係しているかを示す")
+            st.write("ROEが高い企業は、積極的な経営が行われるという見方になる")
+            st.write("")
+
+            
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">④ ROA（総資産利益率）</p>', unsafe_allow_html=True)
+            st.write("事業に投下されている資産によって得られる利益")
+            st.write("株主重視の経営を考えると、ROAよりROEの方が重視されることになる")
+            st.write("")
+
+
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">⑤ 売上利益率</p>', unsafe_allow_html=True)
+            st.write("売上高における売上総利益の割合")        
+            st.write("売上総利益が高ければ、高付加価値の商品を販売していることになり、競争力の高い企業という評価になる")
+            st.write("")
+
+
+            st.subheader("[3] 株価の妥当な値位置をみる指標")
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">① PER（株価収益率）</p>', unsafe_allow_html=True)
+            st.write("１株あたりの利益に対して、株価が何倍まで買われているかを示している指標")
+            st.write("過去の株価の高値、安値をつけたときのPERの数値と現在のPERを比較して、現在の株価が割安か否かを判断することができる")
+            st.write("")
+
+
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">② PBR（株価純資産倍率）</p>', unsafe_allow_html=True)
+            st.write("１株あたりの純資産に対し、株価が何倍まで買われているかを示している指標")
+            st.write("PRR<1ならば、株価が下値を支えられる可能性があるという見方になる")
+            st.write("")
+
+
+        # st.write("_______________________________________________________________________________________________________")
+        # check4 = st.checkbox("行動経済学に関して")
+        # if check4:
+        #     st.write("各種行動経済学に関する理論")
+
+        st.write("_______________________________________________________________________________________________________")
         st.button("スタート画面に戻る",on_click=lambda: change_page2(1))
 
     def display_image(num):
@@ -2338,6 +2465,14 @@ else:
         feature = target_action_type["特徴"][0]
         weekness = target_action_type["欠点"][0]
         advice_text = target_action_type["アドバイス"][0]
+
+        #個人の性格情報から分類型にポイントを与える
+        st.session_state.personal['性格']['新規性'] = st.session_state.Open
+        st.session_state.personal['性格']['誠実性'] = st.session_state.Integrity
+        st.session_state.personal['性格']['外交性'] = st.session_state.Diplomatic
+        st.session_state.personal['性格']['協調性'] = st.session_state.Coordination
+        st.session_state.personal['性格']['神経症傾向'] = st.session_state.Neuroticism
+
 
         st.write("_______________________________________________________________________________________________________")
         st.subheader("全体の投資傾向について")
