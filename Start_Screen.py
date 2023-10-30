@@ -106,6 +106,7 @@ def save_userdata():
             "now": [st.session_state.now], 
             "chose_companies_name_list": [st.session_state.chose_companies_name_list],  
             "possess_money": [st.session_state.possess_money],
+            "possess_money_init": [st.session_state.possess_money_init],
             "possess_KK_df": [st.session_state.possess_KK_df],
             "buy_log": [st.session_state.buy_log],
             "sell_log": [st.session_state.sell_log],
@@ -1501,11 +1502,12 @@ if st.session_state.show_page:
             feature = target_action_type["特徴"][0]
             weekness = target_action_type["欠点"][0]
             advice_text = target_action_type["アドバイス"][0]
+            essay = target_action_type["文章"][0]
 
             st.write("_______________________________________________________________________________________________________")
             st.subheader("総合評価")
             # 枠線で囲む文章
-            text = "これは枠線で囲まれた文章です。"            
+            text = "短期取引が多く、チャート分析を根拠に株を選んでいるあなたには、まず利益の分散を小さくすることをお勧めします。短期取引はボラティリティによる影響を受けやすく、利益が安定しづらい特徴があります。分散が大きいということは、リスクも大きいということです。リスクを抑えるためにも、ポートフォリオの分散を工夫し、リスクを分散させることが重要です。また、現在志向バイアスや確証バイアスの影響を受けている場合、冷静な判断ができていない可能性があります。投資判断を下す際には、感情や先入観に流されず、客観的なデータや情報をもとに判断することが大切です。自分の判断が正しいと確信する前に、反対の意見やデータも検討し、バランスの取れた判断を心がけてください。"            
 
             html_code = f"""
             <div style="
@@ -1522,23 +1524,31 @@ if st.session_state.show_page:
 
             st.subheader("全体の投資傾向について")
 
-            # st.write("投資傾向分類結果を書く")
-            # st.write(f"運用成績：{benef}")
-
             st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">投資行動型</p>', unsafe_allow_html=True)
             st.markdown(f'<p style="font-family:fantasy; color:blue; font-size: 24px;">{action_type}</p>', unsafe_allow_html=True)
-            st.write("特徴：")
-            st.write(feature)
-            st.write("欠点：")
-            st.write(weekness)
-            st.write("アドバイス：")
-            st.write(advice_text)
+            # st.write("特徴：")
+            # st.write(feature)
+            # st.write("欠点：")
+            # st.write(weekness)
+            # st.write("アドバイス：")
+            # st.write(advice_text)
+            html_code = f"""
+            <div style="
+                border: 2px solid #000000;
+                border-radius: 5px;
+                padding: 10px;
+            ">
+                {essay}
+            </div>
+            """
+            st.markdown(html_code, unsafe_allow_html=True)
+
 
             # checkの初期値を設定
             st.session_state.check = False
 
             st.write("################################################################################")
-            check = st.checkbox("詳細な内容を表示", value = st.session_state.check)
+            check = st.checkbox("投資行動の情報を表示", value = st.session_state.check)
             if check:
                 st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">個人の性格</p>', unsafe_allow_html=True)
                 st.write(st.session_state.personal)
@@ -1621,7 +1631,7 @@ if st.session_state.show_page:
                 st.write("特になし")
             else:
                 for i in range(0, len(st.session_state.advice_df)):
-                    st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.advice_df["指摘事項"][i]}</p>', unsafe_allow_html=True)
+                    st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 24px;">{st.session_state.advice_df["指摘事項"][i]}</p>', unsafe_allow_html=True)
 
                     target_BE = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.advice_df['指摘事項'][i]]
                     target_BE = target_BE.reset_index(drop=True)
@@ -1639,9 +1649,10 @@ if st.session_state.show_page:
                 st.session_state.trade_advice_df = some_trade_advice(st.session_state.buy_log, st.session_state.sell_log)  
                 st.session_state.some_trade_advice = True
 
-            if len(st.session_state.trade_advice_df) == 0:
-                st.write("アドバイスすることはありません")
+            if st.session_state.trade_advice_df.empty:
+                st.write("指摘することはありません。")
             else:
+                st.write("あなたの売買データから以下のバイアスが見つかりました。")
                 #trade_advice_dfからグラフを作成する
                 for i in range(0,len(st.session_state.trade_advice_df)):
                     tgt_name = st.session_state.trade_advice_df.iloc[i]['企業名']
@@ -1662,7 +1673,7 @@ if st.session_state.show_page:
                     rdf = target_company.rdf_all[tgt_buy_day_temp:tgt_sell_day_temp]
 
 
-                    st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.trade_advice_df.iloc[i]["指摘事項"]}</p>', unsafe_allow_html=True)
+                    st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 24px;">{st.session_state.trade_advice_df.iloc[i]["指摘事項"]}</p>', unsafe_allow_html=True)
                     target_BE2 = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.trade_advice_df.iloc[i]['指摘事項']]
                     target_BE2 = target_BE2.reset_index(drop=True)
                     st.write(target_BE2['内容'][0])
@@ -1684,7 +1695,17 @@ if st.session_state.show_page:
                         st.markdown(colored_text, unsafe_allow_html=True)
 
                     # st.write("アドバイス")
-                    st.write(target_BE2['アドバイス'][0])
+                    html_code = f"""
+                    <div style="
+                        border: 2px solid #000000;
+                        border-radius: 5px;
+                        padding: 10px;
+                    ">
+                        {target_BE2['アドバイス'][0]}
+                    </div>
+                    """
+                    st.markdown(html_code, unsafe_allow_html=True)
+                    st.write("")
 
             st.write("_______________________________________________________________________________________________________")
 
@@ -2047,6 +2068,7 @@ else:
             st.session_state.now = df["now"][0]
             st.session_state.chose_companies_name_list = df["chose_companies_name_list"][0]
             st.session_state.possess_money = df["possess_money"][0]
+            st.session_state.possess_money_init = df["possess_money_init"][0]
             st.session_state.possess_KK_df = pd.DataFrame(df["possess_KK_df"][0])
             st.session_state.buy_log = pd.DataFrame(df["buy_log"][0])
             st.session_state.sell_log = pd.DataFrame(df["sell_log"][0])
@@ -2465,6 +2487,7 @@ else:
         feature = target_action_type["特徴"][0]
         weekness = target_action_type["欠点"][0]
         advice_text = target_action_type["アドバイス"][0]
+        essay = target_action_type["文章"][0]
 
         #個人の性格情報から分類型にポイントを与える
         st.session_state.personal['性格']['新規性'] = st.session_state.Open
@@ -2475,20 +2498,49 @@ else:
 
 
         st.write("_______________________________________________________________________________________________________")
+        st.subheader("総合評価")
+        # 枠線で囲む文章
+        text = "短期取引が多く、チャート分析を根拠に株を選んでいるあなたには、まず利益の分散を小さくすることをお勧めします。短期取引はボラティリティによる影響を受けやすく、利益が安定しづらい特徴があります。分散が大きいということは、リスクも大きいということです。リスクを抑えるためにも、ポートフォリオの分散を工夫し、リスクを分散させることが重要です。また、現在志向バイアスや確証バイアスの影響を受けている場合、冷静な判断ができていない可能性があります。投資判断を下す際には、感情や先入観に流されず、客観的なデータや情報をもとに判断することが大切です。自分の判断が正しいと確信する前に、反対の意見やデータも検討し、バランスの取れた判断を心がけてください。"            
+
+        html_code = f"""
+        <div style="
+            border: 2px solid #000000;
+            border-radius: 5px;
+            padding: 10px;
+        ">
+            {text}
+        </div>
+        """
+        st.markdown(html_code, unsafe_allow_html=True)
+
+        st.write("_______________________________________________________________________________________________________")
+
         st.subheader("全体の投資傾向について")
 
         st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">投資行動型</p>', unsafe_allow_html=True)
         st.markdown(f'<p style="font-family:fantasy; color:blue; font-size: 24px;">{action_type}</p>', unsafe_allow_html=True)
-        st.write("特徴：")
-        st.write(feature)
-        st.write("欠点：")
-        st.write(weekness)
-        st.write("アドバイス：")
-        st.write(advice_text)
+        # st.write("特徴：")
+        # st.write(feature)
+        # st.write("欠点：")
+        # st.write(weekness)
+        # st.write("アドバイス：")
+        # st.write(advice_text)
+        html_code = f"""
+        <div style="
+            border: 2px solid #000000;
+            border-radius: 5px;
+            padding: 10px;
+        ">
+            {essay}
+        </div>
+        """
+        st.markdown(html_code, unsafe_allow_html=True)
+
+
         st.session_state.check = False
 
         st.write("################################################################################")
-        check = st.checkbox("詳細な内容を表示", value = st.session_state.check)
+        check = st.checkbox("投資行動の情報を表示", value = st.session_state.check)
         if check:
             st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">個人の性格</p>', unsafe_allow_html=True)
             st.write(st.session_state.personal)
@@ -2568,7 +2620,7 @@ else:
         else:
             for i in range(0, len(st.session_state.advice_df_temp)):
                 # st.write(st.session_state.advice_df_temp['指摘事項'][i])
-                st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.advice_df_temp["指摘事項"][i]}</p>', unsafe_allow_html=True)
+                st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 24px;">{st.session_state.advice_df_temp["指摘事項"][i]}</p>', unsafe_allow_html=True)
 
                 target_BE = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.advice_df_temp['指摘事項'][i]]
                 target_BE = target_BE.reset_index(drop=True)
@@ -2589,48 +2641,62 @@ else:
 
 
         #trade_advice_dfからグラフを作成する
-        for i in range(0,len(st.session_state.trade_advice_df_temp)):
-            tgt_name = st.session_state.trade_advice_df_temp.iloc[i]['企業名']
-            tgt_sell_day = st.session_state.sell_log_temp[st.session_state.sell_log_temp['企業名']==tgt_name]['年月'].iloc[-1]
+        if st.session_state.trade_advice_df_temp.empty:
+            st.write("指摘することはありません。")
+        else:
+            st.write("あなたの売買データから以下のバイアスが見つかりました。")
+            for i in range(0,len(st.session_state.trade_advice_df_temp)):
+                tgt_name = st.session_state.trade_advice_df_temp.iloc[i]['企業名']
+                tgt_sell_day = st.session_state.sell_log_temp[st.session_state.sell_log_temp['企業名']==tgt_name]['年月'].iloc[-1]
 
-            tgt_buy_day = st.session_state.buy_log_temp[st.session_state.buy_log_temp['企業名']==tgt_name]['年月'].iloc[-1]
+                tgt_buy_day = st.session_state.buy_log_temp[st.session_state.buy_log_temp['企業名']==tgt_name]['年月'].iloc[-1]
 
-            tgt_buy_day = dt.datetime.strptime(tgt_buy_day, "%Y/%m/%d")
-            tgt_sell_day = dt.datetime.strptime(tgt_sell_day, "%Y/%m/%d")
+                tgt_buy_day = dt.datetime.strptime(tgt_buy_day, "%Y/%m/%d")
+                tgt_sell_day = dt.datetime.strptime(tgt_sell_day, "%Y/%m/%d")
 
-            tgt_buy_day_temp = tgt_buy_day + dt.timedelta(days=-30)
-            tgt_sell_day_temp = tgt_sell_day + dt.timedelta(days=30)
+                tgt_buy_day_temp = tgt_buy_day + dt.timedelta(days=-30)
+                tgt_sell_day_temp = tgt_sell_day + dt.timedelta(days=30)
 
-            index = st.session_state.c_master.loc[(st.session_state.c_master['企業名']==tgt_name)].index.values[0]
-            #companiesからデータを抽出する
-            target_company = st.session_state.loaded_companies[index]
-            name = target_company.name
-            rdf = target_company.rdf_all[tgt_buy_day_temp:tgt_sell_day_temp]
+                index = st.session_state.c_master.loc[(st.session_state.c_master['企業名']==tgt_name)].index.values[0]
+                #companiesからデータを抽出する
+                target_company = st.session_state.loaded_companies[index]
+                name = target_company.name
+                rdf = target_company.rdf_all[tgt_buy_day_temp:tgt_sell_day_temp]
 
-            # st.write(st.session_state.trade_advice_df_temp.iloc[i]['指摘事項'])
-            st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 18px;">{st.session_state.trade_advice_df_temp.iloc[i]["指摘事項"]}</p>', unsafe_allow_html=True)
+                # st.write(st.session_state.trade_advice_df_temp.iloc[i]['指摘事項'])
+                st.markdown(f'<p style="font-family:fantasy; color:green; font-size: 24px;">{st.session_state.trade_advice_df_temp.iloc[i]["指摘事項"]}</p>', unsafe_allow_html=True)
 
-            target_BE2 = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.trade_advice_df_temp.iloc[i]['指摘事項']]
-            target_BE2 = target_BE2.reset_index(drop=True)
-            st.write(target_BE2['内容'][0])
+                target_BE2 = st.session_state.Behavioral_Economics[st.session_state.Behavioral_Economics['理論']==st.session_state.trade_advice_df_temp.iloc[i]['指摘事項']]
+                target_BE2 = target_BE2.reset_index(drop=True)
+                st.write(target_BE2['内容'][0])
 
-            if st.session_state.trade_advice_df_temp.iloc[i]['指摘事項'] == '現在志向バイアス':
-                rdf_temp = rdf[tgt_sell_day:tgt_sell_day_temp]
-                max_date = rdf_temp[rdf_temp['Close']==rdf_temp['Close'].max()].index.values[0]
-                make_graph(name, rdf, buy_date=tgt_buy_day, sell_date=tgt_sell_day, now_kk_bool=True, max_date=max_date)
-            else:
-                make_graph(name, rdf, buy_date=tgt_buy_day, sell_date=tgt_sell_day, now_kk_bool=True)
+                if st.session_state.trade_advice_df_temp.iloc[i]['指摘事項'] == '現在志向バイアス':
+                    rdf_temp = rdf[tgt_sell_day:tgt_sell_day_temp]
+                    max_date = rdf_temp[rdf_temp['Close']==rdf_temp['Close'].max()].index.values[0]
+                    make_graph(name, rdf, buy_date=tgt_buy_day, sell_date=tgt_sell_day, now_kk_bool=True, max_date=max_date)
+                else:
+                    make_graph(name, rdf, buy_date=tgt_buy_day, sell_date=tgt_sell_day, now_kk_bool=True)
 
-            tgt_benef = st.session_state.sell_log_temp[st.session_state.sell_log_temp['企業名']==tgt_name]['利益'].iloc[-1]
+                tgt_benef = st.session_state.sell_log_temp[st.session_state.sell_log_temp['企業名']==tgt_name]['利益'].iloc[-1]
 
-            if tgt_benef < 0:
-                colored_text = f"利益：　<span style='font-size:20px'><span style='color:green'> {round(tgt_benef,1)}円</span> </span>"
-                st.markdown(colored_text, unsafe_allow_html=True)
-            else:
-                colored_text = f"利益：　<span style='font-size:20px'><span style='color:red'> +{round(tgt_benef,1)}円</span> </span>"
-                st.markdown(colored_text, unsafe_allow_html=True)
+                if tgt_benef < 0:
+                    colored_text = f"利益：　<span style='font-size:20px'><span style='color:green'> {round(tgt_benef,1)}円</span> </span>"
+                    st.markdown(colored_text, unsafe_allow_html=True)
+                else:
+                    colored_text = f"利益：　<span style='font-size:20px'><span style='color:red'> +{round(tgt_benef,1)}円</span> </span>"
+                    st.markdown(colored_text, unsafe_allow_html=True)
 
-            st.write(f"{target_BE2['アドバイス'][0]}")
+                html_code = f"""
+                <div style="
+                    border: 2px solid #000000;
+                    border-radius: 5px;
+                    padding: 10px;
+                ">
+                    {target_BE2['アドバイス'][0]}
+                </div>
+                """
+                st.markdown(html_code, unsafe_allow_html=True)
+                st.write("")
 
         st.write("_______________________________________________________________________________________________________")
 
