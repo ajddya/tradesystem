@@ -178,7 +178,7 @@ def init():
 
     #買い・売りの仮ログデータのデータフレーム作成
     if "buy_log_temp" not in st.session_state:
-        st.session_state.buy_log_temp = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '属性'])
+        st.session_state.buy_log_temp = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '当日のボラティリティ', '当日のボラティリティ平均', '属性'])
 
     if "sell_log_temp" not in st.session_state:
         st.session_state.sell_log_temp = pd.DataFrame(columns=['企業名', '年月', '売却根拠', '売却株式数', '利益', '属性'])
@@ -256,7 +256,7 @@ def changeable_init():
 
     #買い・売りのログデータのデータフレーム作成
     if "buy_log" not in st.session_state:
-        st.session_state.buy_log = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '属性'])
+        st.session_state.buy_log = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '当日のボラティリティ', '当日のボラティリティ平均', '属性'])
 
     if "sell_log" not in st.session_state:
         st.session_state.sell_log = pd.DataFrame(columns=['企業名', '年月', '売却根拠', '売却株式数', '利益', '属性'])
@@ -411,7 +411,54 @@ def add_next_day(num):
     
     st.session_state.now = next_day
 
-#_______________________________買い・売りボタンの設定___________________________________
+#_______________________________ボラティリティ計算______________________________________________________________________________________________
+# 当日のボラティリティを計算する
+def VOL_cal(c_name, date):
+    index = st.session_state.c_master.loc[(st.session_state.c_master['企業名']==c_name)].index.values[0]
+    target_company = st.session_state.loaded_companies[index]
+    rdf_all = target_company.rdf_all
+
+    # 前日の株価データを取得
+    pre_buy_day = date - dt.timedelta(days=1)    
+    while pre_buy_day not in rdf_all.index:
+        pre_buy_day -= dt.timedelta(days=1)
+    
+    # 各値の抽出
+    High = rdf_all[date:date]["High"].values[0]  # 高値
+    Low = rdf_all[date:date]["Low"].values[0]  # 安値
+    Close = rdf_all[date:date]["Close"].values[0]  # 終値
+    pre_Close = rdf_all[pre_buy_day:pre_buy_day]["Close"].values[0]  # 前日の終値
+
+    # 当日のTR
+    A = Close - Low       # 当日の高値 - 当日の安値
+    B = High - pre_Close  # 当日の高値 - 前日の終値
+    C = pre_Close - Low   # 前日の終値 - 当日の安値
+
+    TR = A
+    if B > TR:
+        TR = B
+
+    if C > TR:
+        TR = C
+
+    # 当日のTP
+    TP = (High + Low + Close) / 3
+
+    VOL = (TR / TP) * 100
+
+    return round(VOL,2)
+
+# 全銘柄のボラティリティを計算する
+def VOL_all(date):
+    VOL_list = []
+    for i in range(0, len(st.session_state.c_master)):
+        VOL_list.append(VOL_cal(st.session_state.c_master["企業名"][i], date)) 
+        
+    V_mean = np.mean(VOL_list)
+
+    return round(V_mean,2)
+
+#_______________________________買い・売りボタンの設定________________________________________________________________________________________________________________________________________________________________
 def buy(name, rdf_all):
 
     #保有株式数と１株あたりの株価の初期値
@@ -466,13 +513,15 @@ def buy(name, rdf_all):
         buy_now_str = st.session_state.now.strftime('%Y/%m/%d')
             
         #データログにデータを追加
-        buy_log_temp = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '属性'])
+        buy_log_temp = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '当日のボラティリティ', '当日のボラティリティ平均', '属性'])
         buy_log_temp['企業名'] = [name]
         buy_log_temp['年月'] = [buy_now_str]
         buy_log_temp['購入根拠'] = [st.session_state.Rationale_for_purchase]
         buy_log_temp['購入株式数'] = [st.session_state.buy_num ]
         buy_amount = now_data_KK * st.session_state.buy_num
         buy_log_temp['購入金額'] = [buy_amount]
+        buy_log_temp['当日のボラティリティ'] = [VOL_cal(name, st.session_state.now)]
+        buy_log_temp['当日のボラティリティ平均'] = [VOL_all(st.session_state.now) ]
         buy_log_temp['属性'] = ['買い']
         st.session_state.buy_log = pd.concat([st.session_state.buy_log,buy_log_temp],ignore_index=True)
     
@@ -537,7 +586,7 @@ def sell(name, rdf_all):
 
             change_page(2)
 
-#_______________________________評価用基本統計・ヒストグラムの設定___________________________________
+#_______________________________評価用基本統計・ヒストグラムの設定________________________________________________________________________________________________________________________________________________________________
 # 取引量、利益の基本統計量を作成
 def display_distribution(data):
     # 日本語フォントの設定
@@ -591,7 +640,7 @@ def display_distribution2(data):
 
     return value_counts, value_ratios
 
-# 各取引のアドバイス生成#_____________________________________________________________________________________________________________________________
+# 各取引のアドバイス生成
 def some_trade_advice(buy_log, sell_log):
     trade_advice_df = pd.DataFrame(columns=['企業名', '指摘事項', '指摘銘柄数'])
     trade_advice_df_temp = pd.DataFrame(columns=['企業名', '指摘事項', '指摘銘柄数'])
@@ -793,8 +842,7 @@ def advice(buy_reason_ratios, buy_log, sell_log):
     return advice_df
 
 
-
-# 分類型の関数作成#___________________________________________________________________________________________________________________________________________________________________________________________________________
+# ____________________________________________________________分類型の関数作成#___________________________________________________________________________________________________________________________________________________________________________________________________________
 # 分類する関数
 def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_ratios, trade_value, wield_grades):
 
@@ -935,9 +983,7 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
     return classify_type    
 
 
-
-
-# データベースに保存する関数作成_______________________________________________________________________________________________________________________________________________________________________________________________________
+# ____________________________________________________________データベースに保存する関数作成___________________________________________________________________________________________________________________________________________
 # データの挿入
 def insert_data_to_db(private_data, result_data):
     # データベースに接続
@@ -1550,8 +1596,22 @@ if st.session_state.show_page:
             st.write("################################################################################")
             check = st.checkbox("投資行動の情報を表示", value = st.session_state.check)
             if check:
-                st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">個人の性格</p>', unsafe_allow_html=True)
-                st.write(st.session_state.personal)
+                st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">リスク許容度</p>', unsafe_allow_html=True)
+                VOL_delta_list = []
+                for i in range(0, len(st.session_state.buy_log)):
+                    VOL_delta = st.session_state.buy_log["当日のボラティリティ"][i] - st.session_state.buy_log["当日のボラティリティ平均"][i]
+                    VOL_delta_list.append(VOL_delta)
+                    
+                V_delta_mean = np.mean(VOL_delta_list)
+                Risk_tolerance = "中"
+                if V_delta_mean < -1.0:
+                    Risk_tolerance = "低"
+                
+                if V_delta_mean > 1.0:
+                    Risk_tolerance = "高"
+
+                st.write(f"ボラティリティ誤差平均：{V_delta_mean}")
+                st.write(f"リスク許容度：{Risk_tolerance}")
 
                 st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">取引量</p>', unsafe_allow_html=True)
                 #各統計量表示
@@ -2542,8 +2602,22 @@ else:
         st.write("################################################################################")
         check = st.checkbox("投資行動の情報を表示", value = st.session_state.check)
         if check:
-            st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">個人の性格</p>', unsafe_allow_html=True)
-            st.write(st.session_state.personal)
+            st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">リスク許容度</p>', unsafe_allow_html=True)
+            VOL_delta_list = []
+            for i in range(0, len(st.session_state.buy_log)):
+                VOL_delta = st.session_state.buy_log["当日のボラティリティ"][i] - st.session_state.buy_log["当日のボラティリティ平均"][i]
+                VOL_delta_list.append(VOL_delta)
+                
+            V_delta_mean = np.mean(VOL_delta_list)
+            Risk_tolerance = "中"
+            if V_delta_mean < -1.0:
+                Risk_tolerance = "低"
+            
+            if V_delta_mean > 1.0:
+                Risk_tolerance = "高"
+
+            st.write(f"ボラティリティ誤差平均：{V_delta_mean}")
+            st.write(f"リスク許容度：{Risk_tolerance}")
             
             st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">取引量</p>', unsafe_allow_html=True)
             #各統計量表示
