@@ -116,7 +116,8 @@ def save_userdata():
             "create_chose_companies_executed": [st.session_state.create_chose_companies_executed],
             "selected_company": [st.session_state.selected_company],
             "result_bool": [st.session_state.result_bool],
-            "survey_bool": [st.session_state.survey_bool]
+            "survey_bool": [st.session_state.survey_bool],
+            "possess_money_bool": [st.session_state.possess_money_bool]
     }
     save_values_df = pd.DataFrame(save_values)
 
@@ -168,6 +169,9 @@ def init():
 
     if "Behavioral_Economics" not in st.session_state:
         st.session_state.Behavioral_Economics = pd.read_csv('read_file/Behavioral_Economics.csv')
+
+    if "overall_advice" not in st.session_state:
+        st.session_state.overall_advice = pd.read_csv('read_file/overall_advice.csv')
 
     if "loaded_companies" not in st.session_state:
         with open("read_file/companies.pkl", "rb") as file:
@@ -229,6 +233,10 @@ def changeable_init():
 
     if "result_bool" not in st.session_state:
         st.session_state.result_bool = False
+
+    if "possess_money_bool" not in st.session_state:
+        st.session_state.possess_money_bool = False
+    
     
     if "personal" not in st.session_state:
         st.session_state.personal = pd.DataFrame(columns=['性格'], index=['新規性', '誠実性', '外交性', '協調性', '神経症傾向'])
@@ -256,7 +264,7 @@ def changeable_init():
 
     #買い・売りのログデータのデータフレーム作成
     if "buy_log" not in st.session_state:
-        st.session_state.buy_log = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '当日のボラティリティ', '当日のボラティリティ平均', '属性'])
+        st.session_state.buy_log = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '購入金額比率', '当日のボラティリティ', '当日のボラティリティ平均', '属性'])
 
     if "sell_log" not in st.session_state:
         st.session_state.sell_log = pd.DataFrame(columns=['企業名', '年月', '売却根拠', '売却株式数', '利益', '属性'])
@@ -513,19 +521,20 @@ def buy(name, rdf_all):
         buy_now_str = st.session_state.now.strftime('%Y/%m/%d')
             
         #データログにデータを追加
-        buy_log_temp = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '当日のボラティリティ', '当日のボラティリティ平均', '属性'])
+        buy_log_temp = pd.DataFrame(columns=['企業名', '年月', '購入根拠', '購入株式数', '購入金額', '購入金額比率', '当日のボラティリティ', '当日のボラティリティ平均', '属性'])
         buy_log_temp['企業名'] = [name]
         buy_log_temp['年月'] = [buy_now_str]
         buy_log_temp['購入根拠'] = [st.session_state.Rationale_for_purchase]
         buy_log_temp['購入株式数'] = [st.session_state.buy_num ]
         buy_amount = now_data_KK * st.session_state.buy_num
         buy_log_temp['購入金額'] = [buy_amount]
+        buy_amount_rate = buy_amount / st.session_state.possess_money
+        buy_log_temp['購入金額比率'] = [round(buy_amount_rate, 2)]
         buy_log_temp['当日のボラティリティ'] = [VOL_cal(name, st.session_state.now)]
         buy_log_temp['当日のボラティリティ平均'] = [VOL_all(st.session_state.now) ]
         buy_log_temp['属性'] = ['買い']
         st.session_state.buy_log = pd.concat([st.session_state.buy_log,buy_log_temp],ignore_index=True)
     
-      
         st.session_state.possess_money -= purchace_amount
 
         change_page(2)
@@ -1049,7 +1058,8 @@ def insert_survey_to_db():
         ユーザID TEXT,
         実施回数 TEXT,
         システムの満足度 TEXT,
-        システムの正確性 TEXT,
+        システムの正確性1 TEXT,
+        システムの正確性2 TEXT,
         システムの有用性 TEXT,
         意見 TEXT
     )
@@ -1057,8 +1067,8 @@ def insert_survey_to_db():
 
     # データの挿入または更新
     cursor.execute("""
-    INSERT INTO survey_info (ユーザ名, ユーザID, 実施回数, システムの満足度, システムの正確性, システムの有用性, 意見)
-    VALUES (?, ?, ?, ?, ?, ?, ?)""", (st.session_state.acount_name, st.session_state.acount_ID, st.session_state.n, st.session_state.satisfaction, st.session_state.accurate, st.session_state.usefulness, st.session_state.opinion))
+    INSERT INTO survey_info (ユーザ名, ユーザID, 実施回数, システムの満足度, システムの正確性1, システムの正確性2, システムの有用性, 意見)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.acount_name, st.session_state.acount_ID, st.session_state.n, st.session_state.satisfaction, st.session_state.accurate_classify, st.session_state.accurate_instruction, st.session_state.usefulness, st.session_state.opinion))
 
     # データベースの変更をコミット
     conn.commit()
@@ -1125,6 +1135,10 @@ def reset():
 
     if "survey_bool" in st.session_state:
         del st.session_state.survey_bool
+
+    if "possess_money_bool" in st.session_state:
+        del st.session_state.possess_money_bool
+
         
     
 def end_sym():
@@ -1491,14 +1505,21 @@ if st.session_state.show_page:
         st.title("結果画面")
 
         st.header(f"{st.session_state.acount_name}さんの結果")
+
         # 現在時刻を終了時間に合わせる
         st.session_state.now = st.session_state.all_range_end
+
         #保有資産に各保有株の現在値*株式数分を加算する
-        possess_money = st.session_state.possess_money
-        for i in range(0,len(st.session_state.possess_KK_df)):
-            possess_money += st.session_state.possess_KK_df['現在の株価'][i] * st.session_state.possess_KK_df['保有株式数'][i]
-        st.write(f"保有資産：{possess_money}")
-        benef = possess_money - st.session_state.possess_money_init
+        if st.session_state.possess_money_bool==False:
+            for i in range(0,len(st.session_state.possess_KK_df)):
+                st.session_state.possess_money += st.session_state.possess_KK_df['現在の株価'][i] * st.session_state.possess_KK_df['保有株式数'][i]
+                
+            st.session_state.possess_money_bool = True
+
+        st.write(f"保有資産：{st.session_state.possess_money}")
+
+        benef = st.session_state.possess_money - st.session_state.possess_money_init
+        
         if benef < 0:
             colored_text = f"あなたは　<span style='font-size:30px'><span style='color:green'> {round(benef,1)}円</span> </span>の損失を出しました。"
             st.markdown(colored_text, unsafe_allow_html=True)
@@ -1507,6 +1528,51 @@ if st.session_state.show_page:
             st.markdown(colored_text, unsafe_allow_html=True)
 
         if not st.session_state.sell_log.empty:
+            # リスク許容度計算
+            VOL_delta_list = []
+            for i in range(0, len(st.session_state.buy_log)):
+                VOL_delta = st.session_state.buy_log["当日のボラティリティ"][i] - st.session_state.buy_log["当日のボラティリティ平均"][i]
+                VOL_delta_list.append(VOL_delta)
+                
+            V_delta_mean = round(np.mean(VOL_delta_list), 2)
+            Risk_tolerance = "中"
+            if V_delta_mean < -1.0:
+                Risk_tolerance = "低"
+            
+            if V_delta_mean > 1.0:
+                Risk_tolerance = "高"
+
+            # 売買期間計算
+            tern_delta_list = []
+            for i in range(0, len(st.session_state.sell_log)):
+                sell_day = st.session_state.sell_log["年月"][i]
+                sell_day = dt.datetime.strptime(sell_day, "%Y/%m/%d")
+                c_name = st.session_state.sell_log["企業名"][i]
+                buy_day_df = st.session_state.buy_log[st.session_state.buy_log['企業名']==c_name]
+                for j in range(0, len(buy_day_df)):
+                    buy_day = dt.datetime.strptime(buy_day_df['年月'][j], "%Y/%m/%d")
+                    tern_delta = sell_day - buy_day
+                    tern_delta_day = tern_delta.days
+                    if tern_delta_day > 0:
+                        tern_delta_list.append(tern_delta_day)
+                
+            tern_mean = round(np.mean(tern_delta_list), 2)
+            tern = "短"                
+            if tern_mean > 100:
+                tern = "長"
+
+            # 購入金額比率計算
+            buy_rate_list = []
+            for i in range(0, len(st.session_state.buy_log)):
+                buy_rate = st.session_state.buy_log['購入金額比率'][i]
+                buy_rate_list.append(buy_rate)
+
+            buy_rate_mean = round(np.mean(buy_rate_list), 2)
+            tendency = "集中投資型"
+            if buy_rate_mean < 0.2:
+                tendency = "分散投資型"
+                    
+
             # ユーザからの情報をデータフレームとして受け取る
             behavioral_sell_data = {
                 "取引回数": [len(st.session_state.sell_log)], 
@@ -1553,7 +1619,12 @@ if st.session_state.show_page:
             st.write("_______________________________________________________________________________________________________")
             st.subheader("総合評価")
             # 枠線で囲む文章
-            text = "短期取引が多く、チャート分析を根拠に株を選んでいるあなたには、まず利益の分散を小さくすることをお勧めします。短期取引はボラティリティによる影響を受けやすく、利益が安定しづらい特徴があります。分散が大きいということは、リスクも大きいということです。リスクを抑えるためにも、ポートフォリオの分散を工夫し、リスクを分散させることが重要です。また、現在志向バイアスや確証バイアスの影響を受けている場合、冷静な判断ができていない可能性があります。投資判断を下す際には、感情や先入観に流されず、客観的なデータや情報をもとに判断することが大切です。自分の判断が正しいと確信する前に、反対の意見やデータも検討し、バランスの取れた判断を心がけてください。"            
+            overall_advice_temp = st.session_state.overall_advice[st.session_state.overall_advice["リスク許容度"]==Risk_tolerance]
+            overall_advice_temp = overall_advice_temp[overall_advice_temp["売買期間"]==tern]
+            overall_advice_temp = overall_advice_temp[overall_advice_temp["投資傾向"]==tendency]
+            overall_advice_temp = overall_advice_temp[overall_advice_temp["投資型"]==action_type]
+
+            text = overall_advice_temp['アドバイス'].values[0]
 
             html_code = f"""
             <div style="
@@ -1597,21 +1668,17 @@ if st.session_state.show_page:
             check = st.checkbox("投資行動の情報を表示", value = st.session_state.check)
             if check:
                 st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">リスク許容度</p>', unsafe_allow_html=True)
-                VOL_delta_list = []
-                for i in range(0, len(st.session_state.buy_log)):
-                    VOL_delta = st.session_state.buy_log["当日のボラティリティ"][i] - st.session_state.buy_log["当日のボラティリティ平均"][i]
-                    VOL_delta_list.append(VOL_delta)
-                    
-                V_delta_mean = np.mean(VOL_delta_list)
-                Risk_tolerance = "中"
-                if V_delta_mean < -1.0:
-                    Risk_tolerance = "低"
-                
-                if V_delta_mean > 1.0:
-                    Risk_tolerance = "高"
-
                 st.write(f"ボラティリティ誤差平均：{V_delta_mean}")
                 st.write(f"リスク許容度：{Risk_tolerance}")
+
+                st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">売買期間</p>', unsafe_allow_html=True)
+                st.write(f"売買期間平均：{tern_mean}")
+                st.write(f"売買期間：{tern}")
+
+                st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">投資傾向</p>', unsafe_allow_html=True)
+                st.write(f"購入金額比率平均：{buy_rate_mean}")
+                st.write(f"投資傾向：{tendency}")
+
 
                 st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">取引量</p>', unsafe_allow_html=True)
                 #各統計量表示
@@ -1805,15 +1872,17 @@ if st.session_state.show_page:
                 st.session_state.result_bool = True
 
 
-            # st.button("スタート画面に戻る",on_click=end_sym())
+            if st.button(" シミュレーションを終了する "):
+                if st.session_state.survey_bool==False:
+                    change_page2(7)
+                
+                st.session_state.show_page = False
+
         else:
             st.write("株の取引が行われていないため結果を表示できません")
 
-        if st.button(" シミュレーションを終了する "):
-            if st.session_state.survey_bool==False:
-                change_page2(7)
-            
-            st.session_state.show_page = False
+            if st.button(" シミュレーションを終了する "):
+                st.session_state.show_page = False
 
 
     # 購入画面
@@ -2026,7 +2095,7 @@ else:
 
         st.button('シミュレーションを続きから始める',on_click=lambda: start_sym(2))
 
-        st.button('データベースの確認',on_click=lambda: change_page2(99))
+        # st.button('データベースの確認',on_click=lambda: change_page2(99))
 
         if not st.session_state.personal_df.empty:
             save_userdata()
@@ -2139,6 +2208,7 @@ else:
             st.session_state.selected_company = df["selected_company"][0]
             st.session_state.result_bool = df["result_bool"][0]
             st.session_state.survey_bool = df["survey_bool"][0]
+            st.session_state.possess_money_bool = df["possess_money_bool"][0]
 
             st.session_state.chose_companies = []
             for i in range(0,len(st.session_state.chose_companies_name_list)):
@@ -2289,7 +2359,7 @@ else:
 
             st.write("出来高は、その日の取引量の多さを示します。")
             st.write("ローソク足チャートは、特定の期間における株価の始値、終値、高値、安値を「ローソク」と呼ばれる形で表したものです。ローソクの色や形によって、株価の上昇や下降が一目でわかります。")
-            st.write("始値より終値が高くなったものを陽線、その逆を陰線と呼びます。陽線、陰線の味方は以下のようになります。")
+            st.write("始値より終値が高くなったものを陽線、その逆を陰線と呼びます。陽線、陰線の見方は以下のようになります。")
             st.write("始値：その日の最初の株価の値を示します。")
             st.write("終値：その日の最後の株価の値を示します。")
             st.write("高値：その日の株価が一番高くなった時点の値を示します。")
@@ -2514,6 +2584,50 @@ else:
             colored_text = f"あなたは　<span style='font-size:30px'><span style='color:red'> +{round(st.session_state.benef_temp,1)}円</span> </span>の利益を出しました。"
             st.markdown(colored_text, unsafe_allow_html=True)
 
+        # リスク許容度計算
+        VOL_delta_list = []
+        for i in range(0, len(st.session_state.buy_log_temp)):
+            VOL_delta = st.session_state.buy_log_temp["当日のボラティリティ"][i] - st.session_state.buy_log_temp["当日のボラティリティ平均"][i]
+            VOL_delta_list.append(VOL_delta)
+            
+        V_delta_mean = round(np.mean(VOL_delta_list), 2)
+        Risk_tolerance = "中"
+        if V_delta_mean < -1.0:
+            Risk_tolerance = "低"
+        
+        if V_delta_mean > 1.0:
+            Risk_tolerance = "高"
+
+        # 売買期間計算
+        tern_delta_list = []
+        for i in range(0, len(st.session_state.sell_log_temp)):
+            sell_day = st.session_state.sell_log_temp["年月"][i]
+            sell_day = dt.datetime.strptime(sell_day, "%Y/%m/%d")
+            c_name = st.session_state.sell_log_temp["企業名"][i]
+            buy_day_df = st.session_state.buy_log_temp[st.session_state.buy_log_temp['企業名']==c_name]
+            for j in range(0, len(buy_day_df)):
+                buy_day = dt.datetime.strptime(buy_day_df['年月'][j], "%Y/%m/%d")
+                tern_delta = sell_day - buy_day
+                tern_delta_day = tern_delta.days
+                if tern_delta_day > 0:
+                    tern_delta_list.append(tern_delta_day)
+            
+        tern_mean = round(np.mean(tern_delta_list), 2)
+        tern = "短"                
+        if tern_mean > 100:
+            tern = "長"
+
+        # 購入金額比率計算
+        buy_rate_list = []
+        for i in range(0, len(st.session_state.buy_log_temp)):
+            buy_rate = st.session_state.buy_log_temp['購入金額比率'][i]
+            buy_rate_list.append(buy_rate)
+
+        buy_rate_mean = round(np.mean(buy_rate_list), 2)
+        tendency = "集中投資型"
+        if buy_rate_mean < 0.2:
+            tendency = "分散投資型"
+
         behavioral_sell_data = {
             "取引回数": [len(st.session_state.sell_log_temp)], 
             "投資根拠": [st.session_state.sell_log_temp['売却根拠']],
@@ -2560,7 +2674,12 @@ else:
         st.write("_______________________________________________________________________________________________________")
         st.subheader("総合評価")
         # 枠線で囲む文章
-        text = "短期取引が多く、チャート分析を根拠に株を選んでいるあなたには、まず利益の分散を小さくすることをお勧めします。短期取引はボラティリティによる影響を受けやすく、利益が安定しづらい特徴があります。分散が大きいということは、リスクも大きいということです。リスクを抑えるためにも、ポートフォリオの分散を工夫し、リスクを分散させることが重要です。また、現在志向バイアスや確証バイアスの影響を受けている場合、冷静な判断ができていない可能性があります。投資判断を下す際には、感情や先入観に流されず、客観的なデータや情報をもとに判断することが大切です。自分の判断が正しいと確信する前に、反対の意見やデータも検討し、バランスの取れた判断を心がけてください。"            
+        overall_advice_temp = st.session_state.overall_advice[st.session_state.overall_advice["リスク許容度"]==Risk_tolerance]
+        overall_advice_temp = overall_advice_temp[overall_advice_temp["売買期間"]==tern]
+        overall_advice_temp = overall_advice_temp[overall_advice_temp["投資傾向"]==tendency]
+        overall_advice_temp = overall_advice_temp[overall_advice_temp["投資型"]==action_type]
+
+        text = overall_advice_temp['アドバイス'].values[0]
 
         html_code = f"""
         <div style="
@@ -2603,21 +2722,16 @@ else:
         check = st.checkbox("投資行動の情報を表示", value = st.session_state.check)
         if check:
             st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">リスク許容度</p>', unsafe_allow_html=True)
-            VOL_delta_list = []
-            for i in range(0, len(st.session_state.buy_log)):
-                VOL_delta = st.session_state.buy_log["当日のボラティリティ"][i] - st.session_state.buy_log["当日のボラティリティ平均"][i]
-                VOL_delta_list.append(VOL_delta)
-                
-            V_delta_mean = np.mean(VOL_delta_list)
-            Risk_tolerance = "中"
-            if V_delta_mean < -1.0:
-                Risk_tolerance = "低"
-            
-            if V_delta_mean > 1.0:
-                Risk_tolerance = "高"
-
             st.write(f"ボラティリティ誤差平均：{V_delta_mean}")
             st.write(f"リスク許容度：{Risk_tolerance}")
+
+            st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">売買期間</p>', unsafe_allow_html=True)
+            st.write(f"売買期間平均：{tern_mean}")
+            st.write(f"売買期間：{tern}")
+
+            st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">投資傾向</p>', unsafe_allow_html=True)
+            st.write(f"購入金額比率平均：{buy_rate_mean}")
+            st.write(f"投資傾向：{tendency}")
             
             st.markdown('<p style="font-family:fantasy; color:salmon; font-size: 24px;">取引量</p>', unsafe_allow_html=True)
             #各統計量表示
@@ -2791,13 +2905,21 @@ else:
         ]
         st.session_state.satisfaction = st.radio("システムの満足度", satisfaction_arrow)
 
-        # システムの正確性に関して
-        accurate_arrow = [
+        # システムの正確性(分類)に関して
+        accurate_classify_arrow = [
             "合っている",
             "合っていない",
             "わからない"
         ]
-        st.session_state.accurate = st.radio("システムの評価は合っていると思いますか。", accurate_arrow)
+        st.session_state.accurate_classify = st.radio("投資行動型の分類は合っていると思いますか。", accurate_classify_arrow)
+
+        # システムの正確性(行動経済学)に関して
+        accurate_instruction_arrow = [
+            "合っている",
+            "合っていない",
+            "わからない"
+        ]
+        st.session_state.accurate_instruction = st.radio("行動経済学の指摘は合っていると思いますか。", accurate_instruction_arrow)
 
         # システムの有用性に関して
         usefulness_arrow = [
