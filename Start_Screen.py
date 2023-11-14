@@ -1139,7 +1139,6 @@ def reset():
     if "possess_money_bool" in st.session_state:
         del st.session_state.possess_money_bool
 
-        
     
 def end_sym():
     st.session_state.show_page = False
@@ -2068,28 +2067,32 @@ else:
 
 
         st.session_state.level_id = st.selectbox(
-            "レベルセレクト",
-            ["LEVEL_1", "LEVEL_2", "LEVEL_3", "LEVEL_4"],
+            "期間設定",
+            ["1ヶ月", "3ヶ月", "6ヶ月", "12ヶ月"],
             key="level-select"
         )
 
-        if st.session_state.level_id == "LEVEL_1":
+        if st.session_state.level_id == "1ヶ月":
             st.session_state.all_range_end = dt.datetime(2021,2,1) 
-            st.write("１ヶ月で利益を出してください")
+            # st.write("１ヶ月で利益を出してください")
         
-        if st.session_state.level_id == "LEVEL_2":
+        if st.session_state.level_id == "3ヶ月":
             st.session_state.all_range_end = dt.datetime(2021,4,1) 
-            st.write("３ヶ月で +5万円の利益を出してください")
+            # st.write("３ヶ月で +5万円の利益を出してください")
 
-        if st.session_state.level_id == "LEVEL_3":
+        if st.session_state.level_id == "6ヶ月":
             st.session_state.all_range_end = dt.datetime(2021,7,1) 
-            st.write("６ヶ月で +10万円の利益を出してください")
+            # st.write("６ヶ月で +10万円の利益を出してください")
 
-        if st.session_state.level_id == "LEVEL_4":
+        if st.session_state.level_id == "12ヶ月":
             st.session_state.all_range_end = dt.datetime(2022,1,1) 
-            st.write("１年で +20万円利益を出してください")
+            # st.write("１年で +20万円利益を出してください")
 
+        if not st.session_state.personal_df.empty:            
+            # データベースに保存
+            save_userdata()
 
+            st.write(f"現在の保有資産：{st.session_state.possess_money}")
 
         st.button('シミュレーションをはじめから始める',on_click=lambda: start_sym(1))
 
@@ -2097,8 +2100,6 @@ else:
 
         # st.button('データベースの確認',on_click=lambda: change_page2(99))
 
-        if not st.session_state.personal_df.empty:
-            save_userdata()
 
     # 実績
     def page2_2():
@@ -2923,12 +2924,11 @@ else:
 
         # システムの有用性に関して
         usefulness_arrow = [
-            "満足している",
-            "まあまあ満足している",
-            "あまり満足していない",
-            "満足していない"
+            "思う",
+            "思わない",
+            "わからない"
         ]
-        st.session_state.usefulness = st.radio("このシステムのアドバイスは役にたつと思いますか。", usefulness_arrow)
+        st.session_state.usefulness = st.radio("このシステムのアドバイスを今後役立てようと思いますか", usefulness_arrow)
 
         st.session_state.opinion = st.text_input("このシステムに関してご意見があればお聞かせください。", value=st.session_state.get("opinion", ""))
 
