@@ -270,7 +270,7 @@ def changeable_init():
         st.session_state.sell_log = pd.DataFrame(columns=['企業名', '年月', '売却根拠', '売却株式数', '利益', '属性'])
 
     if "Dividends_df" not in st.session_state:
-        st.session_state.Dividends_df = pd.DataFrame(columns=['企業名', '属性', '配当金', "配当基準日", "実施"])
+        st.session_state.Dividends_df = pd.DataFrame(columns=['企業名', '属性', '配当金', "配当基準日", "実施", "種類"])
 
     if "trade_advice_df" not in st.session_state:
         st.session_state.trade_advice_df = pd.DataFrame(columns=['企業名', '指摘事項', '指摘銘柄数'])
@@ -1057,18 +1057,20 @@ def insert_survey_to_db():
         ユーザ名 TEXT,
         ユーザID TEXT,
         実施回数 TEXT,
-        システムの満足度 TEXT,
+        システムの満足度1 TEXT,
+        システムの満足度2 TEXT,
         システムの正確性1 TEXT,
         システムの正確性2 TEXT,
-        システムの有用性 TEXT,
+        システムの有用性1 TEXT,
+        システムの有用性2 TEXT,
         意見 TEXT
     )
     """)
 
     # データの挿入または更新
     cursor.execute("""
-    INSERT INTO survey_info (ユーザ名, ユーザID, 実施回数, システムの満足度, システムの正確性1, システムの正確性2, システムの有用性, 意見)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.acount_name, st.session_state.acount_ID, st.session_state.n, st.session_state.satisfaction, st.session_state.accurate_classify, st.session_state.accurate_instruction, st.session_state.usefulness, st.session_state.opinion))
+    INSERT INTO survey_info (ユーザ名, ユーザID, 実施回数, システムの満足度1, システムの満足度2, システムの正確性1, システムの正確性2, システムの有用性1, システムの有用性2, 意見)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.acount_name, st.session_state.acount_ID, st.session_state.n, st.session_state.satisfaction, st.session_state.satisfaction, st.session_state.accurate_classify, st.session_state.accurate_instruction, st.session_state.usefulness1, st.session_state.usefulness2, st.session_state.opinion))
 
     # データベースの変更をコミット
     conn.commit()
@@ -1202,9 +1204,9 @@ for i in range(0,len(st.session_state.chose_companies)):
     target_company_temp = st.session_state.chose_companies[i]
     # now_KK = target_company_temp.rdf_all['Close'][st.session_state.now]
 
-
 #各保有銘柄の現在値、利益を更新する
 for i in range(0, len(st.session_state.possess_KK_df)):
+    possess_KK_df_temp2 = st.session_state.possess_KK_df
     index_temp = st.session_state.c_master[st.session_state.c_master['企業名'] == st.session_state.possess_KK_df['企業名'][i]].index.values[0]
     target_company_temp2 = st.session_state.loaded_companies[index_temp]
     st.session_state.possess_KK_df['現在の株価'][i] = target_company_temp2.rdf_all['Close'][st.session_state.now]
@@ -1217,28 +1219,37 @@ for i in range(0, len(st.session_state.possess_KK_df)):
     right_day = dt.datetime.strptime(target_company_temp3["期末配当権利付き最終日"], "%Y/%m/%d")
     base_day = dt.datetime.strptime(target_company_temp3["期末配当基準日"], "%Y/%m/%d")
     # nowが中間配当権利付き最終日の場合の処理
-    if st.session_state.now == half_right_day:
-        Dividends_df_temp = pd.DataFrame(columns=['企業名', '属性', '配当金', '配当基準日', '実施'])
-        Dividends_df_temp['企業名'] = target_company_temp3['企業名']
-        Dividends_df_temp['属性'] = '中間'
-        Dividends_df_temp['配当金'] = target_company_temp3['中間配当'] * st.session_state.possess_KK_df['保有株式数'][i]
-        Dividends_df_temp['配当基準日'] = half_base_day
-        Dividends_df_temp['実施'] = False
-        st.session_state.Dividends_df = pd.concat([st.session_state.Dividends_df, Dividends_df_temp], ignore_index=True)
+    if st.session_state.now > half_right_day:
+        if (target_company_temp3['企業名'] + '_' + '中間')  not in st.session_state.Dividends_df['種類'].values:
+            Dividends_df_temp = pd.DataFrame(columns=['企業名', '属性', '配当金', '配当基準日', '実施', '種類'])
+            Dividends_df_temp['企業名'] = [target_company_temp3['企業名']]
+            Dividends_df_temp['属性'] = ['中間']
+            Dividends_df_temp['配当金'] = [target_company_temp3['中間配当'] * st.session_state.possess_KK_df['保有株式数'][i]]
+            Dividends_df_temp['配当基準日'] = [half_base_day]
+            Dividends_df_temp['実施'] = [False]
+            Dividends_df_temp['種類'] = [target_company_temp3['企業名'] + '_' + '中間']
+            st.session_state.Dividends_df = pd.concat([st.session_state.Dividends_df, Dividends_df_temp], ignore_index=True)
 
     # nowが期末配当権利付き最終日の場合の処理
-    if st.session_state.now == right_day:
-        Dividends_df_temp = pd.DataFrame(columns=['企業名', '属性', '配当金', '配当基準日', '実施'])
-        Dividends_df_temp['企業名'] = target_company_temp3['企業名']
-        Dividends_df_temp['属性'] = '期末'
-        Dividends_df_temp['配当金'] = target_company_temp3['期末配当'] * st.session_state.possess_KK_df['保有株式数'][i]
-        Dividends_df_temp['配当基準日'] = base_day
-        Dividends_df_temp['実施'] = False
-        st.session_state.Dividends_df = pd.concat([st.session_state.Dividends_df, Dividends_df_temp], ignore_index=True)
+    if st.session_state.now > right_day:
+        if (target_company_temp3['企業名'] + '_' + '期末')  not in st.session_state.Dividends_df['種類'].values:
+            Dividends_df_temp = pd.DataFrame(columns=['企業名', '属性', '配当金', '配当基準日', '実施', '種類'])
+            Dividends_df_temp['企業名'] = [target_company_temp3['企業名']]
+            Dividends_df_temp['属性'] = ['期末']
+            Dividends_df_temp['配当金'] = [target_company_temp3['期末配当'] * st.session_state.possess_KK_df['保有株式数'][i]]
+            Dividends_df_temp['配当基準日'] = [base_day]
+            Dividends_df_temp['実施'] = [False]
+            Dividends_df_temp['種類'] = [target_company_temp3['企業名'] + '_' + '期末']
+            st.session_state.Dividends_df = pd.concat([st.session_state.Dividends_df, Dividends_df_temp], ignore_index=True)
 
-if st.session_state.now in st.session_state.Dividends_df["配当基準日"]:
-    st.session_state.possess_money += st.session_state.Dividends_df[st.session_state.Dividends_df["配当基準日"]==st.session_state.now]["配当金"].sum()
-    st.session_state.Dividends_df['実施'] = True
+# 配当基準日になったら配当金を加算する
+Dividends_df_temp = st.session_state.Dividends_df[st.session_state.Dividends_df["実施"]==False]
+Dividends_df_temp.reset_index(drop=True)
+for i in range(0, len(Dividends_df_temp)):
+    if Dividends_df_temp['配当基準日'][i] < st.session_state.now:
+        st.session_state.possess_money += Dividends_df_temp["配当金"][i]
+        st.session_state.Dividends_df.loc[st.session_state.Dividends_df['種類']==Dividends_df_temp['種類'][i], '実施'] = True
+        
 
 
 button_css1 = f"""
@@ -2085,7 +2096,7 @@ else:
             # st.write("６ヶ月で +10万円の利益を出してください")
 
         if st.session_state.level_id == "12ヶ月":
-            st.session_state.all_range_end = dt.datetime(2022,1,1) 
+            st.session_state.all_range_end = dt.datetime(2022,1,4) 
             # st.write("１年で +20万円利益を出してください")
 
         if not st.session_state.personal_df.empty:            
@@ -2904,7 +2915,15 @@ else:
             "あまり満足していない",
             "満足していない"
         ]
-        st.session_state.satisfaction = st.radio("システムの満足度", satisfaction_arrow)
+        st.session_state.satisfaction = st.radio("１. このシステムに満足していますか。", satisfaction_arrow)
+
+        # システムの使いやすさ
+        satisfaction_arrow2 = [
+            "使いやすかった",
+            "使いにくかった",
+            "わからない"
+        ]
+        st.session_state.satisfaction2 = st.radio("２. システムは使いやすかったですか。", satisfaction_arrow2)
 
         # システムの正確性(分類)に関して
         accurate_classify_arrow = [
@@ -2912,7 +2931,7 @@ else:
             "合っていない",
             "わからない"
         ]
-        st.session_state.accurate_classify = st.radio("投資行動型の分類は合っていると思いますか。", accurate_classify_arrow)
+        st.session_state.accurate_classify = st.radio("３. 投資行動型の分類は合っていると思いますか。", accurate_classify_arrow)
 
         # システムの正確性(行動経済学)に関して
         accurate_instruction_arrow = [
@@ -2920,17 +2939,25 @@ else:
             "合っていない",
             "わからない"
         ]
-        st.session_state.accurate_instruction = st.radio("行動経済学の指摘は合っていると思いますか。", accurate_instruction_arrow)
+        st.session_state.accurate_instruction = st.radio("４. 行動経済学の指摘は合っていると思いますか。", accurate_instruction_arrow)
 
         # システムの有用性に関して
-        usefulness_arrow = [
+        usefulness_arrow1 = [
             "思う",
             "思わない",
             "わからない"
         ]
-        st.session_state.usefulness = st.radio("このシステムのアドバイスを今後役立てようと思いますか", usefulness_arrow)
+        st.session_state.usefulness1 = st.radio("５. このシステムのアドバイスは役にたつと思いますか。", usefulness_arrow1)
 
-        st.session_state.opinion = st.text_input("このシステムに関してご意見があればお聞かせください。", value=st.session_state.get("opinion", ""))
+        # システムの有用性に関して
+        usefulness_arrow2 = [
+            "思う",
+            "思わない",
+            "わからない"
+        ]
+        st.session_state.usefulness2 = st.radio("５. このシステムのアドバイスを今後役立てようと思いますか。", usefulness_arrow2)
+
+        st.session_state.opinion = st.text_input("６. このシステムに関してご意見があればお聞かせください。", value=st.session_state.get("opinion", ""))
 
         st.button("システムの評価を送る",on_click=insert_survey_to_db)
 
