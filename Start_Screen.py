@@ -1559,8 +1559,9 @@ if st.session_state.show_page:
                 sell_day = dt.datetime.strptime(sell_day, "%Y/%m/%d")
                 c_name = st.session_state.sell_log["企業名"][i]
                 buy_day_df = st.session_state.buy_log[st.session_state.buy_log['企業名']==c_name]
+
                 for j in range(0, len(buy_day_df)):
-                    buy_day = dt.datetime.strptime(buy_day_df['年月'][j], "%Y/%m/%d")
+                    buy_day = dt.datetime.strptime(buy_day_df.iloc[j]['年月'], "%Y/%m/%d")
                     tern_delta = sell_day - buy_day
                     tern_delta_day = tern_delta.days
                     if tern_delta_day > 0:
@@ -1959,7 +1960,7 @@ if st.session_state.show_page:
 
     # ログ画面
     def page8():
-        st.title("テスト画面")
+        st.title("ログ画面")
         st.subheader("買い・売りログデータ")
         col_buy, col_sell = st.columns(2)
         with col_buy:
@@ -2330,8 +2331,8 @@ else:
         st.session_state.Open = st.slider("開放性", 0, 6, st.session_state.get("Open", 6))
         st.session_state.Integrity = st.slider("誠実性", 0, 6, st.session_state.get("Integrity", 6))
         st.session_state.Diplomatic = st.slider("外交性", 0, 6, st.session_state.get("Diplomatic", 6))
-        st.session_state.Coordination = st.slider("協調性", 0, 6, st.session_state.get("Coordination", 6))
-        st.session_state.Neuroticism = st.slider("神経症傾向", 0, 6, st.session_state.get("Neuroticism", 6))
+        st.session_state.Coordination = st.slider("調和性", 0, 6, st.session_state.get("Coordination", 6))
+        st.session_state.Neuroticism = st.slider("情緒安定性", 0, 6, st.session_state.get("Neuroticism", 6))
 
         if not check_acount_name(st.session_state.acount_name) and (st.session_state.acount_name != ""):
             st.button("アカウントを作成する",on_click=lambda: create_acount())
@@ -2361,6 +2362,23 @@ else:
 
             st.markdown('<p style="font-family:monospace; color:black ; font-size: 18px;　text-decoration: underline;">・　リターンの期待値とその実現の可能性　</p>', unsafe_allow_html=True)
             st.write("株式投資によるリターンは、株価の上昇や配当によって得られます。しかし、リターンの期待値は常に変動するため、投資の際には慎重な判断が必要です。")
+
+        st.write("_______________________________________________________________________________________________________")
+        check1_2 = st.checkbox("配当に関して")
+        if check1_2:
+            st.markdown('<p style="font-family:monospace; color:black ; font-size: 18px;　text-decoration: underline;">・　配当とは何か　</p>', unsafe_allow_html=True)
+            st.write("配当とは、企業が利益を出した際に、その一部を株主に分配することです。配当は通常、現金で受け取ることができます。各銘柄の配当基準日にその銘柄の株を持っていた場合に配当金を受け取ることができます。")
+
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">配当性向</p>', unsafe_allow_html=True)
+            st.write("当期純利益のうち企業が株主にどれだけの配当金を還元しているかを表している数値")
+            st.write("企業が成長するには投資する必要があるため、配当性向が低いからといって悪いわけではない。")
+            st.write("")
+
+            st.markdown('<p style="font-family:monospace; color:mediumblue ; font-size: 24px;">配当利回り</p>', unsafe_allow_html=True)
+            st.write("株価に対する年間配当金の割合を示す指標")
+            st.write("例えば、配当金が1000円で株価が30万円の株式と配当金が800円で株価が24万円の株式では、どちらの利回りがいいかわからない。")
+            st.write("そんな時に統一して測る物差しとして配当利回りは利用される。")
+            st.write("")
 
 
         st.write("_______________________________________________________________________________________________________")
