@@ -1407,6 +1407,37 @@ if st.session_state.show_page:
 
         st.subheader(f"買付余力：{round(st.session_state.possess_money)}")
 
+        st.write("_______________________________________________________________________________________________________")
+
+        if not st.session_state.possess_KK_df.empty:
+            companies_data_2_temp = []
+            for com_name in st.session_state.possess_KK_df["企業名"]:
+                c_master_index = st.session_state.c_master[st.session_state.c_master["企業名"]==com_name].index.values[0]
+                companies_data_2_temp.append(st.session_state.loaded_companies[c_master_index])
+
+            companies_data_2 = []
+            for company in companies_data_2_temp:
+                rdf_all_temp = company.rdf_all[all_range_start:st.session_state.now]
+                now_KK = rdf_all_temp['Close'][-1]
+                pre_KK = rdf_all_temp['Close'][-2]
+                now_pre = now_KK - pre_KK
+                companies_data_2.append((company.name, now_KK, now_pre, rdf_all_temp))
+
+            # 2. ループの最適化
+            for i, (name, now_KK, now_pre, rdf) in enumerate(companies_data_2):
+                col3_2, col4_2, col5_2 = st.columns((2, 2, 4))
+                with col3_2:
+                    st.subheader(name)
+                    st.button("株価を見る", key=f"chose_companies_key_{i}", on_click=partial(change_page, 2, name))
+                with col4_2:
+                    st.metric(label='現在値', value=f'{round(now_KK,1)} 円', delta=f'{round(now_pre,1)} 円', delta_color='inverse')
+                with col5_2:
+                    buf = make_simple_graph(name, rdf)
+                    st.image(buf)
+
+
+        st.write("_______________________________________________________________________________________________________")
+
         st.button("選択可能銘柄一覧へ戻る",on_click=lambda: change_page(1))
 
 
@@ -2680,6 +2711,13 @@ else:
         buy_reason_count, buy_reason_ratios = display_distribution2(bdf2['投資根拠'][0])
         sell_reason_count, sell_reason_ratios = display_distribution2(bdf['投資根拠'][0])
 
+        #個人の性格情報から分類型にポイントを与える
+        st.session_state.personal['性格']['新規性'] = st.session_state.Open
+        st.session_state.personal['性格']['誠実性'] = st.session_state.Integrity
+        st.session_state.personal['性格']['外交性'] = st.session_state.Diplomatic
+        st.session_state.personal['性格']['協調性'] = st.session_state.Coordination
+        st.session_state.personal['性格']['神経症傾向'] = st.session_state.Neuroticism
+
         classify_type_df = classify_action_type(st.session_state.personal, st.session_state.sell_log_temp, buy_reason_ratios, sell_reason_ratios, trade_value, wield_grades)
 
         # 最も高いポイントに分類
@@ -2692,14 +2730,6 @@ else:
         weekness = target_action_type["欠点"][0]
         advice_text = target_action_type["アドバイス"][0]
         essay = target_action_type["文章"][0]
-
-        #個人の性格情報から分類型にポイントを与える
-        st.session_state.personal['性格']['新規性'] = st.session_state.Open
-        st.session_state.personal['性格']['誠実性'] = st.session_state.Integrity
-        st.session_state.personal['性格']['外交性'] = st.session_state.Diplomatic
-        st.session_state.personal['性格']['協調性'] = st.session_state.Coordination
-        st.session_state.personal['性格']['神経症傾向'] = st.session_state.Neuroticism
-
 
         st.write("_______________________________________________________________________________________________________")
         st.subheader("総合評価")
