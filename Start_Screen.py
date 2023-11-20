@@ -2667,7 +2667,7 @@ else:
             c_name = st.session_state.sell_log_temp["企業名"][i]
             buy_day_df = st.session_state.buy_log_temp[st.session_state.buy_log_temp['企業名']==c_name]
             for j in range(0, len(buy_day_df)):
-                buy_day = dt.datetime.strptime(buy_day_df['年月'][j], "%Y/%m/%d")
+                buy_day = dt.datetime.strptime(buy_day_df.iloc[j]['年月'], "%Y/%m/%d")
                 tern_delta = sell_day - buy_day
                 tern_delta_day = tern_delta.days
                 if tern_delta_day > 0:
