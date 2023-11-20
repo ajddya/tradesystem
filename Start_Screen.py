@@ -2141,7 +2141,7 @@ else:
 
         st.button('シミュレーションを続きから始める',on_click=lambda: start_sym(2))
 
-        # st.button('データベースの確認',on_click=lambda: change_page2(99))
+        st.button('データベースの確認',on_click=lambda: change_page2(99))
 
 
     # 実績
