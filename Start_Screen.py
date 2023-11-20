@@ -839,7 +839,6 @@ def advice(buy_reason_ratios, buy_log, sell_log):
             within_31_days = delta_time[delta_time <= pd.Timedelta(days=31)]
 
             # 結果をデータフレームに追加
-            trade_time_df = trade_time_df.append(within_31_days)
             trade_time_df = pd.concat([trade_time_df,within_31_days], ignore_index=True)
 
         trade_time_df = trade_time_df.reset_index(drop=True)
