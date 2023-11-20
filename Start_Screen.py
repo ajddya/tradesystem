@@ -840,6 +840,7 @@ def advice(buy_reason_ratios, buy_log, sell_log):
 
             # 結果をデータフレームに追加
             trade_time_df = trade_time_df.append(within_31_days)
+            trade_time_df = pd.concat([trade_time_df,within_31_days], ignore_index=True)
 
         trade_time_df = trade_time_df.reset_index(drop=True)
         short_trade_rate = len(trade_time_df) / len(sell_log)
