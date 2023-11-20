@@ -2141,7 +2141,7 @@ else:
 
         st.button('シミュレーションを続きから始める',on_click=lambda: start_sym(2))
 
-        st.button('データベースの確認',on_click=lambda: change_page2(99))
+        # st.button('データベースの確認',on_click=lambda: change_page2(99))
 
 
     # 実績
@@ -3006,6 +3006,8 @@ else:
         st.session_state.usefulness2 = st.radio("５. このシステムのアドバイスを今後役立てようと思いますか。", usefulness_arrow2)
 
         st.session_state.opinion = st.text_input("６. このシステムに関してご意見があればお聞かせください。", value=st.session_state.get("opinion", ""))
+
+        st.write("https://docs.google.com/forms/d/e/1FAIpQLSdUpvXOI0tWvVzneWPqlHCu726TNve7l0wnQsCOCLC3GOigRQ/viewform?usp=sf_link")
 
         st.button("システムの評価を送る",on_click=insert_survey_to_db)
 
