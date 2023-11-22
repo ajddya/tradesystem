@@ -9,3 +9,5 @@ schedule==1.2.0
 scipy==1.9.1
 
 japanize-matplotlib==1.1.3
+
+sqlalchmy==1.4.39 
