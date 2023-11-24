@@ -40,7 +40,7 @@ plt.rcParams['font.family'] = 'IPAexGothic'
 # データをデータベースに保存する
 def save_userdata():
     # データベースに接続
-    conn = sqlite3.connect('db/my_database.db')
+    conn = sqlite3.connect('my_database.db')
     cursor = conn.cursor()
 
     # テーブルを削除
@@ -929,7 +929,7 @@ def classify_action_type(personal, sell_log, buy_reason_ratios, sell_reason_rati
 import os
 # ダウンロード用の関数
 def download_db():
-    db_path = 'db/my_database.db'
+    db_path = 'my_database.db'
 
     if os.path.exists(db_path):
         with open(db_path, "rb") as file:
@@ -946,7 +946,7 @@ def download_db():
 # データの挿入
 def insert_data_to_db(private_data, result_data):
     # データベースに接続
-    conn = sqlite3.connect('db/my_database.db')
+    conn = sqlite3.connect('my_database.db')
     c = conn.cursor()
 
     # テーブルの削除
@@ -975,7 +975,7 @@ def insert_data_to_db(private_data, result_data):
 # データの確認
 def check_db():
         # データベースに接続
-        conn = sqlite3.connect('db/my_database.db')
+        conn = sqlite3.connect('my_database.db')
         c = conn.cursor()
 
         c.execute('SELECT * FROM user_data ')
@@ -996,7 +996,7 @@ def check_db():
 def insert_survey_to_db():
 
     # データベースに接続
-    conn = sqlite3.connect('db/my_database.db')
+    conn = sqlite3.connect('my_database.db')
     cursor = conn.cursor()
 
     # テーブルを削除
@@ -2967,7 +2967,7 @@ else:
 
         st.write("_______________________________________________________________________________________________________")
         # データベースに接続
-        conn = sqlite3.connect('db/my_database.db')
+        conn = sqlite3.connect('my_database.db')
 
         # personal_info テーブルからすべてのデータを取得
         query = "SELECT * FROM personal_info"
@@ -2995,7 +2995,7 @@ else:
 
         st.write("_______________________________________________________________________________________________________")
         # データベースに接続
-        conn = sqlite3.connect('db/my_database.db')
+        conn = sqlite3.connect('my_database.db')
 
         # personal_info テーブルからすべてのデータを取得
         query = "SELECT * FROM survey_info"
