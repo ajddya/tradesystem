@@ -2131,7 +2131,7 @@ else:
 
     def load_data(acount_name):
         # データベースに接続
-        conn = sqlite3.connect('db/my_database.db')
+        conn = sqlite3.connect('my_database.db')
         cursor = conn.cursor()        
 
         # SQLクエリで該当するデータを取得
@@ -2212,6 +2212,8 @@ else:
         conn.close()
 
         create_acount()
+    
+    import shutil
 
     # アカウント画面
     def page2_3():
@@ -2221,6 +2223,21 @@ else:
         st.button("アカウントを作成",on_click=lambda: change_page2("3_a"))
 
         st.write("アカウント名を入力して以前までのデータを取得することができます。")
+        
+        #データベースファイルのアップロード
+        uploaded_file = st.file_uploader(".dbファイルをアップロードしてください", type=["db"])
+        if uploaded_file is not None:
+            temp_db_path = "temp_uploaded.db"
+            with open(temp_db_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+
+            if os.path.exists(temp_db_path):
+                existing_db_path = 'my_database.db'
+                shutil.move(temp_db_path, existing_db_path)
+                st.success("データベースファイルが置き換えられました。")
+            else:
+                st.error("一時ファイルの保存に失敗しました。")
+
         if not st.session_state.load_data_bool:
             if st.button("以前のデータを取得する"):
                 st.session_state.load_data_bool = True
@@ -2254,7 +2271,7 @@ else:
     # アカウント名がデータベースにあるかをチェックする
     def check_acount_name(acount_name):
         # データベースに接続
-        conn = sqlite3.connect('db/my_database.db')
+        conn = sqlite3.connect('my_database.db')
         cursor = conn.cursor()
 
         # SQLクエリで指定されたユーザ名が存在するか確認
