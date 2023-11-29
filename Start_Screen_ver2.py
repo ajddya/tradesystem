@@ -1219,13 +1219,36 @@ else:
             st.write(f"現在の保有資産：{st.session_state.possess_money}")
 
         st.button('シミュレーションをはじめから始める',on_click=lambda: start_sym(1))
-
         st.button('シミュレーションを続きから始める',on_click=lambda: start_sym(2))
+
+        if "pass_bool" not in st.session_state:
+            st.session_state.pass_bool = False
 
         if not st.session_state.personal_df.empty:
             if st.session_state.acount_name == "test_1234":
-                st.sidebar.button('データベースの確認',on_click=lambda: change_page2(99))
-                st.sidebar.button('データベースのダウンロード',on_click=download_db)
+                if st.session_state.pass_bool == False:
+                    pw = st.sidebar.text_input("パスワード")
+                    st.sidebar.checkbox("")
+                    if pw == "311055":
+                        st.session_state.pass_bool = True
+                    
+                else:
+                    st.sidebar.button('データベースの確認',on_click=lambda: change_page2(99))
+                    st.sidebar.button('データベースのダウンロード',on_click=download_db)
+                    #データベースファイルのアップロード
+                    uploaded_file = st.sidebar.file_uploader(".dbファイルをアップロードしてください", type=["db"])
+                    if uploaded_file is not None:
+                        temp_db_path = "temp_uploaded.db"
+                        with open(temp_db_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+
+                        if os.path.exists(temp_db_path):
+                            existing_db_path = 'my_database.db'
+                            shutil.copyfile(temp_db_path, existing_db_path)
+                            st.sidebar.success("データベースファイルが置き換えられました。")
+                        else:
+                            st.error("一時ファイルの保存に失敗しました。")
+
 
     # 実績
     def page2_2():
@@ -1310,16 +1333,12 @@ else:
 
         # その他変数データの取り出し
         # ユーザ名が一致するデータの取得
-        cursor.execute('SELECT * FROM value_table WHERE value LIKE ?', (f'%"{acount_name}"%',))
+        cursor.execute('SELECT value FROM value_table WHERE ユーザ名 = ?', (acount_name,))
         data = cursor.fetchall()
 
         # 一致するデータがある場合
         if data:            
-            # データの JSON 文字列を取得
-            json_str = data[0][0]
-            
-            # JSON 文字列を DataFrame に変換
-            df = pd.read_json(json_str, convert_dates=['now'])
+            df = pickle.loads(data[0][0])
             
             st.session_state.now = df["now"][0]
             st.session_state.chose_companies_name_list = df["chose_companies_name_list"][0]
@@ -1441,16 +1460,17 @@ else:
         st.session_state.trade_knowledge = st.radio("投資に関する知識の有無", trade_knowledge_arrow)
 
 
-        st.write("以下のURLから個人の性格についてのテストを実施して情報を入力してください。")
-        st.write("https://commutest.com/bigfive")
+        st.write("以下のどちらかのURLから個人の性格についてのテストを実施して情報を入力してください。")
+        st.write("① https://commutest.com/bigfive")
+        st.write("② https://questi.jp/diagnoses/commons/bigfive/new")
         st.session_state.Open = st.slider("開放性", 0, 6, st.session_state.get("Open", 6))
         st.session_state.Integrity = st.slider("誠実性", 0, 6, st.session_state.get("Integrity", 6))
         st.session_state.Diplomatic = st.slider("外交性", 0, 6, st.session_state.get("Diplomatic", 6))
-        st.session_state.Coordination = st.slider("調和性", 0, 6, st.session_state.get("Coordination", 6))
-        st.session_state.Neuroticism = st.slider("情緒安定性", 0, 6, st.session_state.get("Neuroticism", 6))
+        st.session_state.Coordination = st.slider("協調性", 0, 6, st.session_state.get("Coordination", 6))
+        st.session_state.Neuroticism = st.slider("神経症傾向", 0, 6, st.session_state.get("Neuroticism", 6))
 
-        # if not check_acount_name(st.session_state.acount_name) and (st.session_state.acount_name != ""):
-        st.button("アカウントを作成する",on_click=lambda: create_acount())
+        if not check_acount_name(st.session_state.acount_name) and (st.session_state.acount_name != ""):
+            st.button("アカウントを作成する",on_click=lambda: create_acount())
 
         st.button("戻る",on_click=lambda: change_page2(3))
 
@@ -1653,7 +1673,7 @@ else:
             st.write("このシステムの使い方やシステムを使う上での注意事項などがわかります。")
             colored_text3 = f"<span style='font-size:15px'><span style='color:red'> これまでの実績 </span> </span>　：　これまでのシミュレーションの結果をここから見ることができます。"
             st.markdown(colored_text3, unsafe_allow_html=True)
-            colored_text4 = f"<span style='font-size:15px'><span style='color:red'> レベルセレクト </span> </span>　：　LEVEL1〜LEVEL4までの難易度を設定できます。"
+            colored_text4 = f"<span style='font-size:15px'><span style='color:red'> 期間設定 </span> </span>　：　1ヶ月、3ヶ月、6ヶ月、12ヶ月の中からシミュレーションで使用するデータの期間を設定できます。"
             st.markdown(colored_text4, unsafe_allow_html=True)
 
 
@@ -1693,7 +1713,7 @@ else:
 
         if st.session_state.n == 9:
             st.write("購入画面では、購入株式数や購入根拠を選択できます。")
-            st.write("購入根拠は後の分析で使用しますので、その銘柄を購入する上で最も重要視しているものを選択してください。")
+            st.write("購入根拠は後の分析で使用しますので、その銘柄を購入する際の素直な理由を選択してください。")
             for i in range(4):
                 st.write("")
 
@@ -2126,21 +2146,14 @@ else:
         df = pd.read_sql_query(query, conn)
         query = "SELECT * FROM simulation_results"
         df2 = pd.read_sql_query(query, conn)
+        query = "SELECT * FROM value_table"
+        df3 = pd.read_sql_query(query, conn)
 
         # Streamlit でデータを表示
         st.write("my_database.db")
         st.write(df)
         st.write(df2)
-
-        c = conn.cursor()
-        c.execute('SELECT * FROM value_table ')
-        for row in c:
-            serialized_data = row[0]
-
-            deserialized_data = pd.read_json(serialized_data)
-            st.write(deserialized_data)
-
-        c.close()
+        st.write(df3)
 
         # データベース接続をクローズ
         conn.close()
