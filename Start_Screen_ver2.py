@@ -1355,7 +1355,6 @@ else:
             st.session_state.result_bool = df["result_bool"][0]
             st.session_state.survey_bool = df["survey_bool"][0]
             st.session_state.possess_money_bool = df["possess_money_bool"][0]
-            st.session_state.n = df["n"][0]
 
             st.session_state.chose_companies = []
             for i in range(0,len(st.session_state.chose_companies_name_list)):
