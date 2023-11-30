@@ -66,7 +66,7 @@ def save_userdata():
         INSERT OR REPLACE INTO personal_info (ユーザ名, ユーザID, 年齢, 性別, 投資経験の有無, 投資に関する知識の有無, 開放性, 誠実性, 外交性, 協調性, 神経症傾向)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (row["ユーザ名"], row["ユーザID"], row["年齢"], row["性別"], row["投資経験の有無"], row["投資に関する知識の有無"], row["開放性"], row["誠実性"], row["外交性"], row["協調性"], row["神経症傾向"]))
     
-    # # result 
+    # # result __________________________________________________________________________________________________________
 
     # テーブルを削除
     # cursor.execute("drop table simulation_results")
@@ -101,9 +101,8 @@ def save_userdata():
         cursor.execute("INSERT OR REPLACE INTO simulation_results (ユーザ名, data) VALUES (?, ?)", (row["ユーザ名"], serialized_data))
 
 
-    # その他変数をデータベースに格納
+    # その他変数をデータベースに格納_______________________________________________________________________________________
     save_values = {
-            "ユーザ名": [st.session_state.personal_df['ユーザ名'][0]],
             "now": [st.session_state.now], 
             "chose_companies_name_list": [st.session_state.chose_companies_name_list],  
             "possess_money": [st.session_state.possess_money],
@@ -123,25 +122,22 @@ def save_userdata():
     }
     save_values_df = pd.DataFrame(save_values)
 
-    save_values_df_serialized = save_values_df.to_json()
+    df_binary = pickle.dumps(save_values_df)
 
     # テーブルを削除
     # cursor.execute("drop table value_table")
 
     # テーブルの作成
-    cursor.execute('CREATE TABLE IF NOT EXISTS value_table(value)')
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS value_table (
+        ユーザ名 TEXT PRIMARY KEY,
+        value BLOB
+    )
+    """)
 
-    # ユーザ名が一致するデータの取得
-    cursor.execute('SELECT * FROM value_table WHERE value LIKE ?', (f'%"{st.session_state.personal_df["ユーザ名"][0]}"%',))
-    data = cursor.fetchall()
+    cursor.execute('INSERT OR REPLACE INTO value_table (ユーザ名, value) VALUES (?, ?)', (st.session_state.personal_df["ユーザ名"][0], df_binary))
 
-    # 一致するデータがある場合
-    if data:
-        # ユーザ名が一致するデータの削除
-        cursor.execute('DELETE FROM value_table WHERE value LIKE ?', (f'%"{st.session_state.personal_df["ユーザ名"][0]}"%',))
 
-    # データの挿入
-    cursor.execute('INSERT INTO value_table (value) VALUES (?)', (save_values_df_serialized,))
 
     # データベースの変更をコミット
     conn.commit()
