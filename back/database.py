@@ -118,7 +118,6 @@ def save_userdata():
             "result_bool": [st.session_state.result_bool],
             "survey_bool": [st.session_state.survey_bool],
             "possess_money_bool": [st.session_state.possess_money_bool],
-            "n": [st.session_state.n]
     }
     save_values_df = pd.DataFrame(save_values)
 
@@ -202,7 +201,7 @@ def insert_survey_to_db():
     # データの挿入または更新
     cursor.execute("""
     INSERT INTO survey_info (ユーザ名, ユーザID, 実施回数, システムの満足度1, システムの満足度2, システムの正確性1, システムの正確性2, システムの有用性1, システムの有用性2, 意見)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.acount_name, st.session_state.acount_ID, st.session_state.n, st.session_state.satisfaction, st.session_state.satisfaction, st.session_state.accurate_classify, st.session_state.accurate_instruction, st.session_state.usefulness1, st.session_state.usefulness2, st.session_state.opinion))
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.acount_name, st.session_state.acount_ID, st.session_state.num - 1, st.session_state.satisfaction, st.session_state.satisfaction, st.session_state.accurate_classify, st.session_state.accurate_instruction, st.session_state.usefulness1, st.session_state.usefulness2, st.session_state.opinion))
 
     # データベースの変更をコミット
     conn.commit()
@@ -211,7 +210,6 @@ def insert_survey_to_db():
     conn.close()
 
     st.session_state.survey_bool = True
-    st.session_state.n += 1
     change_page2(1)
 
     save_db()
