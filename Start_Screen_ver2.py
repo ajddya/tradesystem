@@ -237,14 +237,14 @@ def start_sym(n):
             st.session_state.possess_money_init = st.session_state.possess_money
             st.session_state.show_page = True
         else:
-            st.sidebar.write("アカウント情報を入力してください")
+            st.sidebar.error("アカウント情報を入力してください")
 
     # 続きから始めるボタン
     if n == 2:
         if st.session_state.account_created==True:
             st.session_state.show_page = True
         else:
-            st.sidebar.write("アカウント情報を入力してください")
+            st.sidebar.error("アカウント情報を入力してください")
 
 def change_page(num, name=None):
     if name:
@@ -1198,25 +1198,22 @@ else:
 
         if st.session_state.level_id == "1ヶ月":
             st.session_state.all_range_end = dt.datetime(2021,2,1) 
-            # st.write("１ヶ月で利益を出してください")
         
         if st.session_state.level_id == "3ヶ月":
             st.session_state.all_range_end = dt.datetime(2021,4,1) 
-            # st.write("３ヶ月で +5万円の利益を出してください")
 
         if st.session_state.level_id == "6ヶ月":
             st.session_state.all_range_end = dt.datetime(2021,7,1) 
-            # st.write("６ヶ月で +10万円の利益を出してください")
 
         if st.session_state.level_id == "12ヶ月":
             st.session_state.all_range_end = dt.datetime(2022,1,4) 
-            # st.write("１年で +20万円利益を出してください")
 
         if not st.session_state.personal_df.empty:            
             # データベースに保存
-            save_userdata()
-
-            st.write(f"現在の保有資産：{st.session_state.possess_money}")
+            st.sidebar.button("データをセーブする", on_click=save_userdata)
+            st.sidebar.write("________________________________________________________________")
+            st.sidebar.header(f"アカウント名：{st.session_state.personal_df['ユーザ名'][0]}")
+            st.sidebar.header(f"現在の保有資産：{st.session_state.possess_money}")
 
         st.button('シミュレーションをはじめから始める',on_click=lambda: start_sym(1))
         st.button('シミュレーションを続きから始める',on_click=lambda: start_sym(2))
@@ -1226,10 +1223,12 @@ else:
 
         if not st.session_state.personal_df.empty:
             if st.session_state.acount_name == "test_1234":
+                st.sidebar.write("________________________________________________________________")
                 if st.session_state.pass_bool == False:
                     pw = st.sidebar.text_input("パスワード")
                     st.sidebar.checkbox("")
-                    if pw == "311055":
+                    pass_key = os.environ.get("pass_key")
+                    if pw == pass_key:
                         st.session_state.pass_bool = True
                     
                 else:
