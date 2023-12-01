@@ -5,6 +5,7 @@ import json
 import pandas as pd
 import os
 import shutil
+import time
 
 def change_page2(num, buy_log=None, sell_log=None, benef=None, advice_df=None):
     if buy_log is not None and not buy_log.empty:
@@ -145,6 +146,8 @@ def save_userdata():
     conn.close()
 
     save_db()
+
+    time.sleep(1)
 
 # データの挿入
 def insert_data_to_db(private_data, result_data):
