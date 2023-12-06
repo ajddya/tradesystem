@@ -2070,44 +2070,44 @@ else:
         # システムの使いやすさ
         satisfaction_arrow2 = [
             "使いやすかった",
-            "使いにくかった",
-            "わからない"
+            "使いにくかった"
         ]
         st.session_state.satisfaction2 = st.radio("２. システムは使いやすかったですか。", satisfaction_arrow2)
+
+        st.session_state.satisfaction3 = st.text_input("３. システムのどの部分が使いやすかった、または使いにくかったですか。", value=st.session_state.get("satisfaction3", ""))
 
         # システムの正確性(分類)に関して
         accurate_classify_arrow = [
             "合っている",
-            "合っていない",
-            "わからない"
+            "部分的に合っている",
+            "合っていない"
         ]
-        st.session_state.accurate_classify = st.radio("３. 投資行動型の分類は合っていると思いますか。", accurate_classify_arrow)
+        st.session_state.accurate_classify = st.radio("４. 投資行動型の分類は合っていると思いますか。", accurate_classify_arrow)
 
         # システムの正確性(行動経済学)に関して
         accurate_instruction_arrow = [
             "合っている",
-            "合っていない",
-            "わからない"
+            "部分的に合っている",
+            "合っていない"
         ]
-        st.session_state.accurate_instruction = st.radio("４. 行動経済学の指摘は合っていると思いますか。", accurate_instruction_arrow)
+        st.session_state.accurate_instruction = st.radio("５. 行動経済学の指摘は合っていると思いますか。", accurate_instruction_arrow)
 
         # システムの有用性に関して
         usefulness_arrow1 = [
-            "思う",
-            "思わない",
-            "わからない"
+            "参考になる",
+            "部分的に参考になる",
+            "参考にならない"
         ]
-        st.session_state.usefulness1 = st.radio("５. このシステムのアドバイスは役にたつと思いますか。", usefulness_arrow1)
+        st.session_state.usefulness1 = st.radio("６. このシステムのアドバイスは参考になりますか。", usefulness_arrow1)
 
         # システムの有用性に関して
         usefulness_arrow2 = [
             "思う",
-            "思わない",
-            "わからない"
+            "思わない"
         ]
-        st.session_state.usefulness2 = st.radio("５. このシステムのアドバイスを今後役立てようと思いますか。", usefulness_arrow2)
+        st.session_state.usefulness2 = st.radio("７. このシステムのアドバイスを今後役立てようと思いますか。", usefulness_arrow2)
 
-        st.session_state.opinion = st.text_input("６. このシステムに関してご意見があればお聞かせください。", value=st.session_state.get("opinion", ""))
+        st.session_state.opinion = st.text_input("８. このシステムに関してご意見があればお聞かせください。", value=st.session_state.get("opinion", ""))
 
         st.button("システムの評価を送る",on_click=insert_survey_to_db)
 
