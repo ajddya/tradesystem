@@ -186,6 +186,12 @@ def insert_survey_to_db():
     # テーブルを削除
     # cursor.execute("drop table survey_info")
 
+    try:
+        cursor.execute('ALTER TABLE survey_info ADD COLUMN "システムの満足度3" TEXT;')
+    except sqlite3.OperationalError:
+        # 既にある場合はスルー
+        pass
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS survey_info (
         ユーザ名 TEXT,
